@@ -186,11 +186,47 @@ def build_explanation(
             elif bb_pct > 0.9:
                 sentences.append(f"Price is near the upper Bollinger Band ({tf_label}) — potential resistance zone.")
 
-        # Candlestick patterns
-        if summary["cdl_hammer"] and tf in ["1h", "4h"]:
-            sentences.append("A hammer candlestick pattern was detected — a classic bullish reversal signal.")
-        if summary["cdl_engulfing"] and tf in ["1h", "4h"]:
-            sentences.append("A bullish/bearish engulfing pattern was detected — a strong reversal indicator.")
+        # Candlestick patterns (only report on 1h/4h to keep explanations concise)
+        if tf not in ["1h", "4h"]:
+            continue
+
+        # Bullish single-candle
+        if summary["cdl_hammer"]:
+            sentences.append(f"A hammer pattern was detected ({tf_label}) — classic bullish reversal signal.")
+        if summary["cdl_inverted_hammer"]:
+            sentences.append(f"An inverted hammer appeared ({tf_label}) — potential bullish reversal.")
+        if summary["cdl_marubozu"]:
+            sentences.append(f"A marubozu candle detected ({tf_label}) — strong directional momentum.")
+
+        # Bearish single-candle
+        if summary["cdl_shooting_star"]:
+            sentences.append(f"A shooting star pattern appeared ({tf_label}) — bearish reversal signal.")
+        if summary["cdl_hanging_man"]:
+            sentences.append(f"A hanging man detected ({tf_label}) — potential bearish reversal.")
+
+        # Two-candle patterns
+        if summary["cdl_engulfing"]:
+            sentences.append(f"A bullish engulfing pattern detected ({tf_label}) — strong reversal indicator.")
+        if summary["cdl_bearish_engulfing"]:
+            sentences.append(f"A bearish engulfing pattern detected ({tf_label}) — strong bearish reversal.")
+        if summary["cdl_piercing_line"]:
+            sentences.append(f"A piercing line pattern appeared ({tf_label}) — bullish reversal signal.")
+        if summary["cdl_dark_cloud"]:
+            sentences.append(f"A dark cloud cover detected ({tf_label}) — bearish reversal signal.")
+        if summary["cdl_tweezer_top"]:
+            sentences.append(f"A tweezer top detected ({tf_label}) — potential bearish reversal at resistance.")
+        if summary["cdl_tweezer_bottom"]:
+            sentences.append(f"A tweezer bottom detected ({tf_label}) — potential bullish reversal at support.")
+
+        # Three-candle patterns
+        if summary["cdl_morning_star"]:
+            sentences.append(f"A morning star pattern formed ({tf_label}) — strong bullish reversal.")
+        if summary["cdl_evening_star"]:
+            sentences.append(f"An evening star pattern formed ({tf_label}) — strong bearish reversal.")
+        if summary["cdl_three_white_soldiers"]:
+            sentences.append(f"Three white soldiers detected ({tf_label}) — sustained bullish pressure.")
+        if summary["cdl_three_black_crows"]:
+            sentences.append(f"Three black crows detected ({tf_label}) — sustained bearish pressure.")
 
     if not sentences:
         sentences.append("Multiple technical indicators are aligned to generate this signal.")
@@ -203,4 +239,4 @@ def build_explanation(
             seen.add(s)
             unique_sentences.append(s)
 
-    return " ".join(unique_sentences[:6])  # Cap at 6 sentences for readability
+    return " ".join(unique_sentences[:8])  # Cap at 8 sentences for readability
