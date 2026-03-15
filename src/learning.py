@@ -36,6 +36,8 @@ HISTORY_PATH = "data/signal_history.json"
 EVALUATION_DELAY_HOURS = 24
 RETRAIN_THRESHOLD = 10   # Retrain after this many new evaluations
 OUTCOME_THRESHOLD = 0.01  # 1% move to count as correct (more lenient than label threshold)
+MIN_ACCURACY_FOR_SKIP = 0.65  # Skip retraining if recent accuracy is above this
+ERROR_WEIGHT_MULTIPLIER = 2.0  # Training weight boost for time periods with incorrect signals
 
 
 def load_signal_history(path: str = HISTORY_PATH) -> list[dict]:
@@ -177,16 +179,63 @@ def evaluate_outcomes(
     return updated, newly_evaluated
 
 
-def should_retrain(history: list[dict]) -> bool:
+def should_retrain(history: list[dict]) -> tuple[bool, float | None]:
     """
-    Return True if enough new evaluations have accumulated to warrant retraining.
+    Decide whether retraining is needed based on recent signal accuracy.
+
+    Returns:
+        (should_retrain, recent_accuracy)
+        - If fewer than RETRAIN_THRESHOLD evaluations: (False, None)
+        - If accuracy >= MIN_ACCURACY_FOR_SKIP: (False, accuracy) — model is fine
+        - If accuracy < MIN_ACCURACY_FOR_SKIP: (True, accuracy) — retrain needed
     """
-    new_evals = sum(
-        1 for r in history
+    recent = [
+        r for r in history
         if r.get("evaluated") and r.get("outcome") is not None
         and not r.get("used_for_training", False)
+    ]
+    if len(recent) < RETRAIN_THRESHOLD:
+        return False, None
+
+    correct = sum(1 for r in recent if r["outcome"] == "correct")
+    accuracy = correct / len(recent)
+
+    if accuracy >= MIN_ACCURACY_FOR_SKIP:
+        logger.info(
+            "Recent accuracy %.1f%% (%d/%d) — above %.0f%% threshold, skipping retrain",
+            accuracy * 100, correct, len(recent), MIN_ACCURACY_FOR_SKIP * 100,
+        )
+        return False, accuracy
+
+    logger.info(
+        "Recent accuracy %.1f%% (%d/%d) — below %.0f%% threshold, retrain needed",
+        accuracy * 100, correct, len(recent), MIN_ACCURACY_FOR_SKIP * 100,
     )
-    return new_evals >= RETRAIN_THRESHOLD
+    return True, accuracy
+
+
+def get_outcome_weights(history: list[dict]) -> dict[str, float]:
+    """
+    Build a mapping of signal timestamps to training weight multipliers.
+
+    Incorrect signals get ERROR_WEIGHT_MULTIPLIER (2.0) so the model pays
+    more attention to patterns from time periods where it failed.
+    Correct signals get 1.0 (no change).
+
+    Returns:
+        {iso_timestamp: weight} for all evaluated signals not yet used for training.
+    """
+    weights = {}
+    for r in history:
+        if not r.get("evaluated") or r.get("outcome") is None:
+            continue
+        if r.get("used_for_training", False):
+            continue
+        ts = r.get("timestamp")
+        if ts:
+            weight = ERROR_WEIGHT_MULTIPLIER if r["outcome"] == "incorrect" else 1.0
+            weights[ts] = weight
+    return weights
 
 
 def mark_used_for_training(history: list[dict]) -> list[dict]:
