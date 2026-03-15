@@ -7,6 +7,7 @@ Handles training, prediction, persistence, and incremental retraining.
 
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import joblib
@@ -41,7 +42,11 @@ class BTCModel:
     def is_trained(self) -> bool:
         return self.model is not None
 
-    def train(self, df: pd.DataFrame) -> dict:
+    def train(
+        self,
+        df: pd.DataFrame,
+        outcome_weights: dict[str, float] | None = None,
+    ) -> dict:
         """
         Train the model on a feature DataFrame.
 
@@ -50,6 +55,9 @@ class BTCModel:
 
         Args:
             df: DataFrame with FEATURE_COLUMNS + 'close' column
+            outcome_weights: optional {iso_timestamp: weight} from evaluated
+                signals. Rows matching error-period timestamps get boosted
+                sample weights so the model learns harder from its mistakes.
 
         Returns:
             dict with accuracy, classification_report string
@@ -72,6 +80,12 @@ class BTCModel:
         class_counts = y_train.value_counts()
         max_count = class_counts.max()
         sample_weights = y_train.map(lambda c: max_count / class_counts.get(c, 1)).values
+
+        # Apply outcome-based weight multipliers from evaluated signals
+        if outcome_weights:
+            sample_weights = self._apply_outcome_weights(
+                df.loc[mask].iloc[:split_idx], sample_weights, outcome_weights
+            )
 
         self.model = XGBClassifier(
             n_estimators=300,
@@ -123,16 +137,89 @@ class BTCModel:
 
         return signal, confidence
 
-    def retrain_incremental(self, df: pd.DataFrame) -> dict:
+    def retrain_incremental(
+        self,
+        df: pd.DataFrame,
+        outcome_weights: dict[str, float] | None = None,
+    ) -> dict:
         """
         Retrain the model from scratch on an augmented dataset.
 
         XGBoost does not support true online learning, but full retraining
         on 2+ years of data still runs in ~10-30 seconds — acceptable for
         a GitHub Actions workflow.
+
+        Args:
+            df: full training DataFrame
+            outcome_weights: optional {iso_timestamp: weight} to boost
+                sample weights for time periods where the model was wrong
         """
         logger.info("Retraining model [%s] with %d rows", self.timeframe, len(df))
-        return self.train(df)
+        return self.train(df, outcome_weights=outcome_weights)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _apply_outcome_weights(
+        self,
+        df_train: pd.DataFrame,
+        sample_weights: np.ndarray,
+        outcome_weights: dict[str, float],
+    ) -> np.ndarray:
+        """
+        Multiply sample_weights by outcome-based multipliers for matching rows.
+
+        Matches signal timestamps to training data rows within one candle
+        duration window (1h for 1h timeframe, 4h for 4h, etc.).
+        """
+        candle_hours = {"1h": 1, "4h": 4, "1d": 24}
+        window = timedelta(hours=candle_hours.get(self.timeframe, 1))
+
+        # Parse outcome timestamps once
+        parsed_outcomes = []
+        for ts_str, weight in outcome_weights.items():
+            try:
+                ts = datetime.fromisoformat(ts_str)
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                parsed_outcomes.append((ts, weight))
+            except (ValueError, TypeError):
+                continue
+
+        if not parsed_outcomes:
+            return sample_weights
+
+        sample_weights = sample_weights.copy()
+        boosted = 0
+
+        if "timestamp" in df_train.columns:
+            for i, row_ts in enumerate(df_train["timestamp"]):
+                if pd.isna(row_ts):
+                    continue
+                if isinstance(row_ts, str):
+                    try:
+                        row_ts = datetime.fromisoformat(row_ts)
+                    except (ValueError, TypeError):
+                        continue
+                elif isinstance(row_ts, pd.Timestamp):
+                    row_ts = row_ts.to_pydatetime()
+                if row_ts.tzinfo is None:
+                    row_ts = row_ts.replace(tzinfo=timezone.utc)
+
+                for outcome_ts, weight in parsed_outcomes:
+                    if abs((row_ts - outcome_ts).total_seconds()) <= window.total_seconds():
+                        sample_weights[i] *= weight
+                        if weight > 1.0:
+                            boosted += 1
+                        break
+
+        if boosted:
+            logger.info(
+                "Outcome weights applied: %d training samples boosted for [%s]",
+                boosted, self.timeframe,
+            )
+        return sample_weights
 
     def save(self, path: str) -> None:
         """Persist the trained model to disk."""

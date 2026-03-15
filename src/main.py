@@ -29,6 +29,7 @@ from data_fetcher import fetch_historical, fetch_ohlcv, get_eur_usd_rate, usd_to
 from indicators import compute_features
 from learning import (
     evaluate_outcomes,
+    get_outcome_weights,
     load_signal_history,
     mark_used_for_training,
     record_signal,
@@ -167,18 +168,28 @@ def main(dry_run: bool = False, force: bool = False) -> None:
     # ------------------------------------------------------------------
     # Step 6: Retrain if enough new evaluations have accumulated
     # ------------------------------------------------------------------
-    if should_retrain(history):
-        logger.info("Retraining trigger: enough new evaluations — retraining all models...")
+    retrain_needed, recent_accuracy = should_retrain(history)
+
+    if retrain_needed:
+        outcome_wts = get_outcome_weights(history)
+        logger.info(
+            "Retraining trigger: accuracy %.1f%% below threshold — retraining all models...",
+            (recent_accuracy or 0) * 100,
+        )
         for tf in TIMEFRAMES:
             df_hist = fetch_historical(SYMBOL, tf, days=TRAINING_DAYS)
             df_feat = compute_features(df_hist)
-            metrics = models[tf].retrain_incremental(df_feat)
+            metrics = models[tf].retrain_incremental(df_feat, outcome_weights=outcome_wts)
             logger.info(
                 "Model [%s] retrained. Accuracy: %.1f%%",
-                tf, metrics["accuracy"] * 100
+                tf, metrics["accuracy"] * 100,
             )
             models[tf].save(f"{DATA_DIR}/model_{tf}.pkl")
-
+        history = mark_used_for_training(history)
+    elif recent_accuracy is not None:
+        # Accuracy was good enough — still mark evaluations as consumed
+        # so they don't pile up and trigger re-evaluation every run
+        logger.info("Model accuracy sufficient — skipping retrain")
         history = mark_used_for_training(history)
 
     # ------------------------------------------------------------------
