@@ -1,15 +1,1 @@
-[
-  {
-    "id": "20260315T191927",
-    "timestamp": "2026-03-15T19:19:27.677355+00:00",
-    "signal": 1,
-    "entry_price_usd": 71452.36,
-    "exit_price_target_usd": 72027.62020808087,
-    "timeframes_summary": "1h: HOLD (68%) | 4h: HOLD (41%) | 1d: BUY (97%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
-  }
-]
+[]
