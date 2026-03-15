@@ -1,6 +1,6 @@
-pandas>=2.0
-numpy>=1.24
-pandas-ta>=0.3.14b
+pandas>=1.5,<2.0
+numpy>=1.24,<2.0
+pandas-ta==0.3.14b0
 xgboost>=2.0
 scikit-learn>=1.3
 requests>=2.31
