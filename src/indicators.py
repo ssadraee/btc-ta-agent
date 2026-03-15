@@ -1,7 +1,7 @@
 """
 Technical analysis feature engineering using the `ta` library.
 
-Computes 25+ professional-grade indicators across any OHLCV DataFrame
+Computes 40 professional-grade technical analysis features across any OHLCV DataFrame
 and generates binary labels for supervised ML training.
 """
 

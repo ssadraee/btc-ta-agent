@@ -3,7 +3,7 @@
 ## What This Project Does
 
 BTC Technical Analysis Agent — an automated Bitcoin trading signal system that:
-- Analyzes BTC across 3 timeframes (1h, 4h, 1d) using 25+ technical indicators
+- Analyzes BTC across 3 timeframes (1h, 4h, 1d) using 40 technical analysis features
 - Generates BUY/SELL/HOLD signals via per-timeframe XGBoost classifiers
 - Sends rich Telegram notifications with entry/exit prices, stop-loss, and confidence
 - Implements continuous learning: evaluates past signals after 24h and retrains automatically
@@ -14,8 +14,8 @@ BTC Technical Analysis Agent — an automated Bitcoin trading signal system that
 ```
 src/
   main.py           # Entry point & 8-step pipeline orchestrator
-  data_fetcher.py   # Binance OHLCV + EUR/USD rate (Frankfurter fallback)
-  indicators.py     # 25+ TA features: RSI, MACD, Bollinger, EMA, Stochastic RSI, ATR, OBV, candlestick patterns
+  data_fetcher.py   # OHLCV via Binance → Binance US → Bybit fallback + EUR/USD rate
+  indicators.py     # 40 TA features: RSI, MACD, Bollinger, EMA, Stochastic RSI, ATR, OBV, 16 candlestick patterns
   model.py          # XGBoost classifier per timeframe (train/predict/save/load/retrain)
   signals.py        # Weighted multi-TF aggregation + ATR-based entry/exit/stop-loss
   notifier.py       # Telegram HTML message formatting, cooldown enforcement
@@ -34,7 +34,7 @@ requirements.txt    # Python deps
 
 Python 3.11 | pandas | numpy | ta (technical analysis) | xgboost | scikit-learn | joblib | requests
 
-External APIs: Binance (OHLCV, no key needed), Frankfurter (EUR/USD fallback), Telegram Bot API
+External APIs: Binance / Binance US / Bybit (OHLCV, no key needed), Frankfurter (EUR/USD fallback), Telegram Bot API
 
 ## How to Run
 
@@ -52,8 +52,8 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 
 1. Fetch EUR/USD rate (Binance or Frankfurter fallback)
 2. Load saved models or train from scratch (2 years of history)
-3. Fetch 300 recent candles per timeframe from Binance
-4. Compute 25+ TA features via `indicators.py`
+3. Fetch 300 recent candles per timeframe (Binance → Binance US → Bybit fallback)
+4. Compute 40 TA features via `indicators.py`
 5. Per-timeframe XGBoost predictions → (signal, confidence)
 6. Weighted aggregation: 1d=40%, 4h=35%, 1h=25% (`signals.py`)
 7. Evaluate past signal outcomes (24h delay) → retrain if 10+ new evals
@@ -93,7 +93,7 @@ GitHub Actions workflow (`.github/workflows/analyze.yml`):
 
 ## Development Notes
 
-- Binance API may be geo-restricted in some regions
+- Binance API may be geo-restricted in some regions; automatic fallback to Binance US and Bybit
 - First run trains from scratch (~3–5 min to fetch 2 years of data)
 - Signal encoding: 1=BUY, 0=HOLD, -1=SELL throughout codebase
 - Prices shown in both USD and EUR
