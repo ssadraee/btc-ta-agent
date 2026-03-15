@@ -12,7 +12,7 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-BINANCE_BASE = "https://api.binance.com"
+BINANCE_BASE = "https://api.binance.us"
 FRANKFURTER_URL = "https://api.frankfurter.app/latest"
 
 INTERVAL_TO_SECONDS = {
@@ -118,20 +118,9 @@ def fetch_historical(symbol: str, interval: str, days: int = 730) -> pd.DataFram
 def get_eur_usd_rate() -> float:
     """
     Return EUR/USD rate (how many EUR per 1 USD).
-    Primary: derive from Binance BTCUSDT + BTCEUR prices.
-    Fallback: Frankfurter (ECB) API.
+    Primary: Frankfurter (ECB) API.
+    Fallback: hardcoded rate.
     """
-    try:
-        usdt_price = _get_binance_price("BTCUSDT")
-        eur_price = _get_binance_price("BTCEUR")
-        if usdt_price and eur_price and usdt_price > 0:
-            rate = eur_price / usdt_price
-            logger.debug("EUR/USD rate from Binance: %.6f", rate)
-            return rate
-    except Exception as e:
-        logger.warning("Binance EUR rate failed, using Frankfurter: %s", e)
-
-    # Fallback to Frankfurter (ECB)
     try:
         resp = requests.get(
             FRANKFURTER_URL,
@@ -144,7 +133,6 @@ def get_eur_usd_rate() -> float:
         return rate
     except Exception as e:
         logger.error("Frankfurter EUR rate failed: %s", e)
-        # Last resort: use a hardcoded fallback (will be slightly off)
         logger.warning("Using hardcoded EUR/USD fallback: 0.92")
         return 0.92
 
@@ -157,14 +145,6 @@ def usd_to_eur(usd_price: float, eur_usd_rate: float) -> float:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-def _get_binance_price(symbol: str) -> float:
-    """Fetch current price for a symbol from Binance ticker."""
-    url = f"{BINANCE_BASE}/api/v3/ticker/price"
-    resp = requests.get(url, params={"symbol": symbol}, timeout=10)
-    resp.raise_for_status()
-    return float(resp.json()["price"])
-
 
 def _parse_klines(klines: list) -> pd.DataFrame:
     """
