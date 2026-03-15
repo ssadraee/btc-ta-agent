@@ -1,5 +1,5 @@
 """
-Technical analysis feature engineering using pandas-ta.
+Technical analysis feature engineering using the `ta` library.
 
 Computes 25+ professional-grade indicators across any OHLCV DataFrame
 and generates binary labels for supervised ML training.
@@ -9,7 +9,10 @@ import logging
 
 import numpy as np
 import pandas as pd
-import pandas_ta as ta
+from ta.momentum import RSIIndicator, StochRSIIndicator
+from ta.trend import MACD, EMAIndicator
+from ta.volatility import AverageTrueRange, BollingerBands
+from ta.volume import OnBalanceVolumeIndicator
 
 logger = logging.getLogger(__name__)
 
@@ -64,37 +67,33 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
+    close = df["close"]
+    high = df["high"]
+    low = df["low"]
+    volume = df["volume"]
+
     # --- RSI ---
-    df["rsi_14"] = ta.rsi(df["close"], length=14)
+    df["rsi_14"] = RSIIndicator(close=close, window=14).rsi()
 
     # --- MACD ---
-    macd = ta.macd(df["close"], fast=12, slow=26, signal=9)
-    if macd is not None:
-        df["macd"] = macd.iloc[:, 0]       # MACD line
-        df["macd_signal"] = macd.iloc[:, 2]  # Signal line
-        df["macd_hist"] = macd.iloc[:, 1]   # Histogram
-    else:
-        df["macd"] = np.nan
-        df["macd_signal"] = np.nan
-        df["macd_hist"] = np.nan
+    macd_obj = MACD(close=close, window_slow=26, window_fast=12, window_sign=9)
+    df["macd"] = macd_obj.macd()
+    df["macd_signal"] = macd_obj.macd_signal()
+    df["macd_hist"] = macd_obj.macd_diff()
 
     # --- Bollinger Bands ---
-    bbands = ta.bbands(df["close"], length=20, std=2)
-    if bbands is not None:
-        df["bb_lower"] = bbands.iloc[:, 0]
-        df["bb_middle"] = bbands.iloc[:, 1]
-        df["bb_upper"] = bbands.iloc[:, 2]
-        df["bb_bandwidth"] = bbands.iloc[:, 3]
-        df["bb_pct"] = bbands.iloc[:, 4]
-    else:
-        for col in ["bb_lower", "bb_middle", "bb_upper", "bb_bandwidth", "bb_pct"]:
-            df[col] = np.nan
+    bb = BollingerBands(close=close, window=20, window_dev=2)
+    df["bb_upper"] = bb.bollinger_hband()
+    df["bb_middle"] = bb.bollinger_mavg()
+    df["bb_lower"] = bb.bollinger_lband()
+    df["bb_pct"] = bb.bollinger_pband()
+    df["bb_bandwidth"] = bb.bollinger_wband()
 
     # --- EMAs ---
-    df["ema_9"] = ta.ema(df["close"], length=9)
-    df["ema_21"] = ta.ema(df["close"], length=21)
-    df["ema_50"] = ta.ema(df["close"], length=50)
-    df["ema_200"] = ta.ema(df["close"], length=200)
+    df["ema_9"] = EMAIndicator(close=close, window=9).ema_indicator()
+    df["ema_21"] = EMAIndicator(close=close, window=21).ema_indicator()
+    df["ema_50"] = EMAIndicator(close=close, window=50).ema_indicator()
+    df["ema_200"] = EMAIndicator(close=close, window=200).ema_indicator()
 
     # EMA crossover signals: +1 if fast > slow, -1 otherwise
     df["ema_cross_9_21"] = np.where(df["ema_9"] > df["ema_21"], 1.0, -1.0)
@@ -102,39 +101,31 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     df["ema_cross_50_200"] = np.where(df["ema_50"] > df["ema_200"], 1.0, -1.0)
 
     # Price position relative to long-term EMA (normalised)
-    df["close_vs_ema200"] = (df["close"] - df["ema_200"]) / df["ema_200"]
+    df["close_vs_ema200"] = (close - df["ema_200"]) / df["ema_200"]
 
     # --- Stochastic RSI ---
-    stoch_rsi = ta.stochrsi(df["close"], length=14)
-    if stoch_rsi is not None:
-        df["stoch_rsi_k"] = stoch_rsi.iloc[:, 0]
-        df["stoch_rsi_d"] = stoch_rsi.iloc[:, 1]
-    else:
-        df["stoch_rsi_k"] = np.nan
-        df["stoch_rsi_d"] = np.nan
+    stoch = StochRSIIndicator(close=close, window=14, smooth1=3, smooth2=3)
+    df["stoch_rsi_k"] = stoch.stochrsi_k()
+    df["stoch_rsi_d"] = stoch.stochrsi_d()
 
     # --- ATR ---
-    df["atr_14"] = ta.atr(df["high"], df["low"], df["close"], length=14)
+    df["atr_14"] = AverageTrueRange(high=high, low=low, close=close, window=14).average_true_range()
 
     # --- OBV ---
-    df["obv"] = ta.obv(df["close"], df["volume"])
+    df["obv"] = OnBalanceVolumeIndicator(close=close, volume=volume).on_balance_volume()
 
     # --- Volume ratio (current vs 20-period average) ---
-    vol_ma = df["volume"].rolling(20).mean()
-    df["volume_ratio"] = df["volume"] / vol_ma.replace(0, np.nan)
+    vol_ma = volume.rolling(20).mean()
+    df["volume_ratio"] = volume / vol_ma.replace(0, np.nan)
 
     # --- Price momentum ---
-    df["price_change_pct"] = df["close"].pct_change()
-    df["high_low_range_pct"] = (df["high"] - df["low"]) / df["close"]
+    df["price_change_pct"] = close.pct_change()
+    df["high_low_range_pct"] = (high - low) / close
 
-    # --- Candlestick patterns (pandas-ta returns 0/±100) ---
-    hammer = ta.cdl_pattern(df["open"], df["high"], df["low"], df["close"], name="hammer")
-    engulfing = ta.cdl_pattern(df["open"], df["high"], df["low"], df["close"], name="engulfing")
-    doji = ta.cdl_pattern(df["open"], df["high"], df["low"], df["close"], name="doji")
-
-    df["cdl_hammer"] = (hammer.iloc[:, 0] != 0).astype(float) if hammer is not None else 0.0
-    df["cdl_engulfing"] = (engulfing.iloc[:, 0] != 0).astype(float) if engulfing is not None else 0.0
-    df["cdl_doji"] = (doji.iloc[:, 0] != 0).astype(float) if doji is not None else 0.0
+    # --- Candlestick patterns (manual OHLC math) ---
+    df["cdl_doji"] = _cdl_doji(df)
+    df["cdl_hammer"] = _cdl_hammer(df)
+    df["cdl_engulfing"] = _cdl_engulfing(df)
 
     # Drop rows where any required feature is NaN (indicator warm-up period)
     df = df.dropna(subset=FEATURE_COLUMNS).reset_index(drop=True)
@@ -152,13 +143,6 @@ def generate_labels(df: pd.DataFrame, timeframe: str) -> pd.Series:
         0  = HOLD (price stays within ±threshold)
 
     The last `lookahead` rows will be NaN (no future data available).
-
-    Args:
-        df: DataFrame with a 'close' column
-        timeframe: "1h", "4h", or "1d"
-
-    Returns:
-        Series of integer labels aligned with df's index
     """
     lookahead = LOOKAHEAD_CANDLES.get(timeframe, 6)
     future_close = df["close"].shift(-lookahead)
@@ -193,3 +177,42 @@ def get_latest_indicator_summary(df: pd.DataFrame) -> dict:
         "cdl_engulfing": bool(row.get("cdl_engulfing", 0)),
         "cdl_doji": bool(row.get("cdl_doji", 0)),
     }
+
+
+# ---------------------------------------------------------------------------
+# Candlestick pattern helpers (manual OHLC math — no external dependency)
+# ---------------------------------------------------------------------------
+
+def _cdl_doji(df: pd.DataFrame) -> pd.Series:
+    """Doji: body is tiny relative to the total candle range."""
+    body = (df["close"] - df["open"]).abs()
+    range_ = df["high"] - df["low"]
+    return (body / range_.replace(0, np.nan) < 0.1).astype(float).fillna(0)
+
+
+def _cdl_hammer(df: pd.DataFrame) -> pd.Series:
+    """
+    Hammer: small body at the top, lower shadow at least 2× the body,
+    upper shadow smaller than the body. Bullish reversal signal.
+    """
+    body = (df["close"] - df["open"]).abs()
+    body_top = df[["open", "close"]].max(axis=1)
+    body_bottom = df[["open", "close"]].min(axis=1)
+    lower_shadow = body_bottom - df["low"]
+    upper_shadow = df["high"] - body_top
+    return (
+        (lower_shadow > 2 * body) & (upper_shadow < body)
+    ).astype(float)
+
+
+def _cdl_engulfing(df: pd.DataFrame) -> pd.Series:
+    """
+    Bullish engulfing: current bullish candle fully contains the previous
+    bearish candle's body. Strong reversal indicator.
+    """
+    prev_open = df["open"].shift(1)
+    prev_close = df["close"].shift(1)
+    bullish_current = df["close"] > df["open"]
+    bearish_prev = prev_close < prev_open
+    engulfs = (df["open"] <= prev_close) & (df["close"] >= prev_open)
+    return (bullish_current & bearish_prev & engulfs).astype(float).fillna(0)
