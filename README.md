@@ -5,7 +5,7 @@ An automated Bitcoin trading signal agent that applies professional-grade techni
 ## Features
 
 - **Multi-timeframe analysis**: 1-hour, 4-hour, and daily charts
-- **25+ TA indicators**: RSI, MACD, Bollinger Bands, EMA crossovers, Stochastic RSI, ATR, OBV, candlestick patterns
+- **40 TA features**: RSI, MACD, Bollinger Bands, EMA crossovers, Stochastic RSI, ATR, OBV, and 16 candlestick patterns
 - **Machine learning**: XGBoost classifier trained on 2 years of historical data
 - **EUR support**: All prices shown in both USD and EUR
 - **Continuous learning**: Evaluates past signal outcomes and retrains automatically
@@ -81,8 +81,8 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 ```
 src/
 ├── main.py           Orchestrator — runs the full pipeline
-├── data_fetcher.py   Binance OHLCV data + EUR/USD rate
-├── indicators.py     TA feature engineering (25+ indicators)
+├── data_fetcher.py   OHLCV data (Binance → Binance US → Bybit fallback) + EUR/USD rate
+├── indicators.py     TA feature engineering (40 features)
 ├── model.py          XGBoost classifier (train/predict/save/load)
 ├── signals.py        Multi-timeframe aggregation + entry/exit calculation
 ├── notifier.py       Telegram message formatting + sending
@@ -120,5 +120,5 @@ on the full 2-year dataset augmented with the outcome-based labels.
 
 1. **Telegram setup is required** before any notifications will work
 2. **First run trains from scratch** — fetches 2 years of data and trains 3 models (~3-5 min)
-3. **Binance may be geo-restricted** in some regions; the agent falls back to Frankfurter for EUR rates
+3. **Binance may be geo-restricted** in some regions; OHLCV fetching automatically falls back to Binance US and Bybit
 4. **This is not financial advice** — always manage your own risk
