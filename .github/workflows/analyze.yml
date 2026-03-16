@@ -2,13 +2,12 @@ name: BTC Technical Analysis
 
 on:
   schedule:
-    # Run every hour at minute 17.
-    # Rationale: the shortest analyzed timeframe is 1h, so running more
-    # frequently would re-analyze the same candle with no new data.
-    # Minute 17 is used instead of 0 because top-of-hour (minute 0) is
-    # GitHub Actions' peak congestion window; using an off-peak minute
-    # significantly reduces the chance of the run being delayed or dropped.
+    # Run every hour at minute 17 (primary) and 47 (backup).
+    # Two independent cron entries double the chance of GitHub scheduling the
+    # run. If both fire, the concurrency group serializes them and the app-level
+    # cooldown (4h same-direction) prevents duplicate Telegram messages.
     - cron: '17 * * * *'
+    - cron: '47 * * * *'
 
   # Allow manual trigger for testing without waiting for the schedule
   workflow_dispatch:
