@@ -39,5 +39,19 @@
     "outcome_price_usd": null,
     "outcome_pct_change": null,
     "outcome_timestamp": null
+  },
+  {
+    "id": "20260316T194326",
+    "timestamp": "2026-03-16T19:43:26.621299+00:00",
+    "signal": 1,
+    "confidence": 0.6977851390838623,
+    "entry_price_usd": 74181.07,
+    "exit_price_target_usd": 75347.62625457482,
+    "timeframes_summary": "1h: BUY (53%) | 4h: BUY (43%) | 1d: BUY (80%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
   }
 ]
