@@ -202,7 +202,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
             "Signal confidence too low (%.1f%% < %.1f%%) — skipping notification",
             final_confidence * 100, MIN_SIGNAL_CONFIDENCE * 100
         )
-    elif not should_send_signal(history, final_signal) and not force:
+    elif not should_send_signal(history, final_signal, final_confidence) and not force:
         logger.info("Signal suppressed by cooldown")
     else:
         explanation = build_explanation(raw_signals, dfs)
@@ -241,6 +241,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                     entry_price_usd=entry_usd,
                     exit_price_target_usd=exit_usd,
                     timeframes_summary=timeframes_summary,
+                    confidence=final_confidence,
                 )
 
     # ------------------------------------------------------------------

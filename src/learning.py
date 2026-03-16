@@ -10,6 +10,7 @@ Storage format (data/signal_history.json):
     "id": "20240315T120000",
     "timestamp": "2024-03-15T12:00:00+00:00",
     "signal": 1,                      # 1=BUY, -1=SELL
+    "confidence": 0.67,               # aggregate confidence (0–1)
     "entry_price_usd": 84200.0,
     "exit_price_target_usd": 87400.0,
     "timeframes_summary": "1h: BUY (71%) | ...",
@@ -66,6 +67,7 @@ def record_signal(
     entry_price_usd: float,
     exit_price_target_usd: float,
     timeframes_summary: str,
+    confidence: float | None = None,
 ) -> list[dict]:
     """
     Append a new signal to the history.
@@ -76,6 +78,7 @@ def record_signal(
         entry_price_usd: price at signal time
         exit_price_target_usd: target exit price
         timeframes_summary: human-readable timeframe breakdown string
+        confidence: aggregate model confidence (0–1)
 
     Returns:
         Updated history list
@@ -85,6 +88,7 @@ def record_signal(
         "id": now.strftime("%Y%m%dT%H%M%S"),
         "timestamp": now.isoformat(),
         "signal": signal,
+        "confidence": confidence,
         "entry_price_usd": entry_price_usd,
         "exit_price_target_usd": exit_price_target_usd,
         "timeframes_summary": timeframes_summary,

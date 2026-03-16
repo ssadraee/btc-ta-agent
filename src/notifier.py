@@ -141,15 +141,24 @@ def format_outcome_message(
 def should_send_signal(
     signal_history: list[dict],
     current_signal: int,
+    current_confidence: float | None = None,
     cooldown_hours: int = 4,
+    confidence_increase_threshold: float = 0.05,
 ) -> bool:
     """
     Prevent signal spam by enforcing a cooldown between same-direction signals.
 
+    The cooldown is bypassed if the current confidence is at least
+    ``confidence_increase_threshold`` higher than the previous signal's
+    confidence, indicating a strengthening trend.
+
     Args:
         signal_history: list of past signal records
         current_signal: 1=BUY, -1=SELL
+        current_confidence: aggregate confidence for the current signal (0–1)
         cooldown_hours: minimum hours between same-direction signals
+        confidence_increase_threshold: minimum confidence increase (in absolute
+            terms) required to bypass the cooldown (default 0.05 = 5 pp)
 
     Returns:
         True if signal should be sent, False if still in cooldown
@@ -174,6 +183,19 @@ def should_send_signal(
             break  # Records are chronological; no need to check older ones
 
         if record.get("signal") == current_signal:
+            prev_confidence = record.get("confidence")
+            if (
+                current_confidence is not None
+                and prev_confidence is not None
+                and current_confidence >= prev_confidence + confidence_increase_threshold
+            ):
+                logger.info(
+                    "Cooldown bypassed: %s confidence increased from %.0f%% to %.0f%%",
+                    SIGNAL_NAMES[current_signal],
+                    prev_confidence * 100,
+                    current_confidence * 100,
+                )
+                return True
             logger.info(
                 "Signal suppressed (cooldown): same %s signal was sent at %s",
                 SIGNAL_NAMES[current_signal], ts_str
