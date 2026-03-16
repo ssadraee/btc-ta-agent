@@ -1,0 +1,57 @@
+name: Watchdog — Ensure analysis runs
+
+on:
+  schedule:
+    # Offset from main workflow crons (:17 and :47) to act as a safety net.
+    # Checks whether the main workflow ran recently; if not, re-triggers it.
+    - cron: '52 * * * *'
+
+  # Allow manual testing of the watchdog itself
+  workflow_dispatch:
+
+jobs:
+  check-and-trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    permissions:
+      actions: write    # Required to trigger workflow_dispatch
+      contents: read
+
+    steps:
+      - name: Check last successful analysis run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          echo "Fetching last successful run of BTC Technical Analysis..."
+
+          LAST_RUN_JSON=$(gh api \
+            "repos/${GH_REPO}/actions/workflows/analyze.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0]')
+
+          if [ "$LAST_RUN_JSON" = "null" ] || [ -z "$LAST_RUN_JSON" ]; then
+            echo "No successful runs found — triggering workflow."
+            SHOULD_TRIGGER=true
+          else
+            LAST_RUN_TIME=$(echo "$LAST_RUN_JSON" | jq -r '.updated_at')
+            LAST_RUN_EPOCH=$(date -d "$LAST_RUN_TIME" +%s)
+            NOW_EPOCH=$(date +%s)
+            ELAPSED_MINUTES=$(( (NOW_EPOCH - LAST_RUN_EPOCH) / 60 ))
+
+            echo "Last successful run: $LAST_RUN_TIME ($ELAPSED_MINUTES minutes ago)"
+
+            if [ "$ELAPSED_MINUTES" -gt 90 ]; then
+              echo "Stale (>90 min) — triggering workflow."
+              SHOULD_TRIGGER=true
+            else
+              echo "Recent enough — no action needed."
+              SHOULD_TRIGGER=false
+            fi
+          fi
+
+          if [ "$SHOULD_TRIGGER" = "true" ]; then
+            echo "Triggering BTC Technical Analysis via workflow_dispatch..."
+            gh workflow run analyze.yml --repo "$GH_REPO"
+            echo "Workflow triggered successfully."
+          fi
