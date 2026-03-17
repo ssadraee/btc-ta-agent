@@ -34,11 +34,11 @@
     "entry_price_usd": 73847.0,
     "exit_price_target_usd": 74934.61501933106,
     "timeframes_summary": "1h: BUY (63%) | 4h: HOLD (43%) | 1d: BUY (80%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 74282.15,
+    "outcome_pct_change": 0.5893,
+    "outcome_timestamp": "2026-03-17T14:43:44.216783+00:00"
   },
   {
     "id": "20260316T194326",
