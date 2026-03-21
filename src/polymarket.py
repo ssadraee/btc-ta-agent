@@ -40,6 +40,7 @@ GOLDSKY_SUBGRAPH_URL = (
 # ---------------------------------------------------------------------------
 REQUEST_TIMEOUT = 10
 MIN_VOLUME_USD = 1_000
+MIN_BTC_PRICE = 5_000   # reject extracted values below this (e.g. years like 2026)
 SENTIMENT_BULL_THRESHOLD = 0.55
 SENTIMENT_BEAR_THRESHOLD = 0.45
 UPDOWN_INTERVALS = ["5m", "15m", "1h", "4h", "1d", "7d"]
@@ -247,19 +248,16 @@ def _gamma_fetch_thresholds() -> list[dict]:
 
             for event in page:
                 slug = event.get("slug", "").lower()
-                title = event.get("title", "").lower()
-                # Require only a BTC identifier — event titles like "Bitcoin March 2026"
-                # would be dropped by an additional price-keyword filter even though their
-                # nested markets are valid price-prediction markets.
-                if not ("bitcoin" in slug or "btc" in slug
-                        or "bitcoin" in title or "btc" in title):
-                    continue
                 # Updown markets are handled by _gamma_fetch_updown
                 if "updown" in slug:
                     continue
 
                 for mkt in event.get("markets", []):
                     question = mkt.get("question", "") or mkt.get("groupItemTitle", "")
+                    # Market-level BTC check — catches markets in generic-titled events
+                    q_lower = question.lower()
+                    if "bitcoin" not in q_lower and "btc" not in q_lower:
+                        continue
                     if question in seen_questions:
                         continue
                     parsed = _parse_threshold_market(mkt)
@@ -300,6 +298,10 @@ def _gamma_fetch_markets_direct() -> list[dict]:
                 question = mkt.get("question", "") or ""
                 # Updown markets handled separately
                 if "updown" in slug:
+                    continue
+                # Market-level BTC check — Gamma keyword search may return non-BTC markets
+                q_lower = question.lower()
+                if "bitcoin" not in q_lower and "btc" not in q_lower:
                     continue
                 if question in seen_questions:
                     continue
@@ -864,6 +866,8 @@ def _extract_price_from_outcome(text: str) -> float | None:
                 value *= 1_000
             elif suffix == "M":
                 value *= 1_000_000
+            if value < MIN_BTC_PRICE:
+                return None
             return value
         except ValueError:
             pass
