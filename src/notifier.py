@@ -59,6 +59,7 @@ def format_signal_message(
     explanation: str,
     confidence: float,
     timeframes_summary: str,
+    signal_horizon: str = "1–5 days",
 ) -> str:
     """
     Build an HTML-formatted Telegram message for a trading signal.
@@ -89,7 +90,7 @@ def format_signal_message(
         f"{direction_note}\n"
         "\n"
         f"💵 <b>Entry Price:</b> ${entry_usd:,.2f}  (€{entry_eur:,.2f})\n"
-        f"🎯 <b>Exit Price:</b> ${exit_usd:,.2f}  (€{exit_eur:,.2f})\n"
+        f"🎯 <b>Exit Price:</b> ${exit_usd:,.2f}  (€{exit_eur:,.2f})  <i>(ATR-based, 1h chart)</i>\n"
         f"🛑 <b>Stop Loss:</b> ${stop_loss_usd:,.2f}  (€{stop_loss_eur:,.2f})\n"
         f"{profit_icon} <b>{profit_label}:</b> +{profit_pct:.2f}%\n"
         "\n"
@@ -97,7 +98,9 @@ def format_signal_message(
         f"{explanation}\n"
         "\n"
         f"⏱ <b>Timeframes:</b> {timeframes_summary}\n"
-        f"🎯 <b>Confidence:</b> {confidence_pct}% {confidence_bar}\n"
+        f"🧭 <b>Signal Horizon:</b> ~{signal_horizon}\n"
+        f"📊 <b>Confidence:</b> {confidence_pct}% {confidence_bar}\n"
+        f"<i>Weighted model certainty across all 3 timeframes (1d 40% · 4h 35% · 1h 25%). Higher = stronger agreement.</i>\n"
         "\n"
         f"⚠️ <i>This is not financial advice. Always manage your risk and never invest more than you can afford to lose.</i>"
     )
