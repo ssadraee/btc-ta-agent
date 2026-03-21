@@ -21,9 +21,14 @@ An automated Bitcoin trading signal agent that applies professional-grade techni
 📊 Recommendation: BUY
 
 💵 Entry Price: $84,200.00  (€77,850.00)
-🎯 Exit Price:  $87,400.00  (€80,800.00)
+🎯 Exit Price:  $87,400.00  (€80,800.00)  (ATR-based, 1h chart)
 🛑 Stop Loss:   $82,500.00  (€76,250.00)
-📈 Profit Target: +3.80%
+
+📈 Profit Breakdown:
+  Gross target:          +3.80%
+  Fees (taker, 2× legs): -0.82%
+  Tax (30% on profit):   -0.89%
+  Net profit (est.):     +2.09%
 
 🧠 Explanation:
 RSI(1-hour) is 29 — deeply oversold. MACD histogram (4-hour) is positive.
@@ -104,11 +109,19 @@ A notification is only sent when:
 - The aggregate score passes the directional threshold
 - Confidence ≥ 55%
 - No same-direction signal was sent in the last 4 hours
+- Net profit after trading fees and tax is ≥ 1%
 
 ### Entry / Exit Prices
 - **Entry price**: Current market price
 - **Exit price**: Entry ± (ATR × 2.0) — dynamically sized based on current volatility
 - **Stop loss**: Entry ∓ (ATR × 1.5) — standard risk/reward ratio of 1:1.33
+
+### Profit Calculation
+All displayed profit estimates account for real trading costs:
+- **Gross target**: Raw ATR-based price move as % of entry
+- **Fees**: Taker fee (0.40%) × both legs (entry + exit), applied to order value
+- **Tax**: 30% of any positive profit remaining after fees
+- **Net profit**: The final estimated return; signals are suppressed when net profit < 1%
 
 ### Continuous Learning
 After each signal, the entry price is stored. After 24 hours, the agent checks

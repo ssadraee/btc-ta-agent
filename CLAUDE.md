@@ -5,7 +5,7 @@
 BTC Technical Analysis Agent — an automated Bitcoin trading signal system that:
 - Analyzes BTC across 3 timeframes (1h, 4h, 1d) using 40 technical analysis features
 - Generates BUY/SELL/HOLD signals via per-timeframe XGBoost classifiers
-- Sends rich Telegram notifications with entry/exit prices, stop-loss, and confidence
+- Sends rich Telegram notifications with entry/exit prices, stop-loss, fees/tax-adjusted net profit, and confidence
 - Implements continuous learning: evaluates past signals after 24h and retrains automatically
 - Runs hourly via GitHub Actions (free on public repos)
 
@@ -57,7 +57,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 5. Per-timeframe XGBoost predictions → (signal, confidence)
 6. Weighted aggregation: 1d=40%, 4h=35%, 1h=25% (`signals.py`)
 7. Evaluate past signal outcomes (24h delay) → retrain if 10+ new evals
-8. Send Telegram notification (if actionable) → persist signal history
+8. Send Telegram notification (if actionable, net profit ≥ 1% after fees & tax) → persist signal history
 
 ## Key Constants
 
@@ -71,6 +71,10 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 | `SIGNAL_THRESHOLD` | 0.40 | `signals.py` |
 | `ATR_EXIT_MULTIPLIER` | 2.0 | `signals.py` |
 | `ATR_STOP_MULTIPLIER` | 1.5 | `signals.py` |
+| `MAKER_FEE` | 0.0025 (0.25%) | `signals.py` |
+| `TAKER_FEE` | 0.0040 (0.40%) | `signals.py` |
+| `TAX_RATE` | 0.30 (30%) | `signals.py` |
+| `MIN_NET_PROFIT_PCT` | 1.0 (1%) | `signals.py` |
 | `EVALUATION_DELAY_HOURS` | 24 | `learning.py` |
 | `RETRAIN_THRESHOLD` | 10 | `learning.py` |
 | `OUTCOME_THRESHOLD` | 0.01 (1%) | `learning.py` |
@@ -98,4 +102,5 @@ GitHub Actions workflow (`.github/workflows/analyze.yml`):
 - Signal encoding: 1=BUY, 0=HOLD, -1=SELL throughout codebase
 - Prices shown in both USD and EUR
 - Cooldown: no same-direction signal within 4 hours
+- Profit calculation: gross ATR-based target minus taker fees (0.40% per leg, on order value) minus 30% tax on gains = net profit; signals are only sent when net profit ≥ 1%
 - No tests or linter configured yet

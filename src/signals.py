@@ -24,6 +24,16 @@ SIGNAL_THRESHOLD = 0.40
 ATR_EXIT_MULTIPLIER = 2.0
 ATR_STOP_MULTIPLIER = 1.5
 
+# Trading fees (applied to order value, not profit)
+MAKER_FEE = 0.0025        # 0.25% per trade leg
+TAKER_FEE = 0.0040        # 0.40% per trade leg (conservative default)
+
+# Tax rate applied to profit after fees
+TAX_RATE = 0.30           # 30% capital gains tax
+
+# Minimum net profit (after fees and tax) required to generate a signal
+MIN_NET_PROFIT_PCT = 1.0
+
 SIGNAL_NAMES = {1: "BUY", 0: "HOLD", -1: "SELL"}
 
 # Expected lookahead per timeframe (candles × candle size)
@@ -87,13 +97,17 @@ def calculate_entry_exit(df: pd.DataFrame, signal: int) -> dict:
     Calculate entry price, exit target, stop-loss, and profit margin.
 
     Uses ATR-based dynamic targets — a professional risk management standard.
+    Profit estimates are net of trading fees (taker rate, on order value) and
+    a 30% capital gains tax on any positive profit after fees.
 
     Args:
         df: feature DataFrame (must contain 'close' and 'atr_14' columns)
         signal: 1=BUY, -1=SELL
 
     Returns:
-        dict with entry_price, exit_price, stop_loss, profit_margin_pct
+        dict with entry_price, exit_price, stop_loss, gross_profit_pct,
+        fees_pct, profit_after_fees_pct, tax_pct, net_profit_pct, atr.
+        profit_margin_pct is kept as an alias for gross_profit_pct.
     """
     entry_price = float(df["close"].iloc[-1])
     atr = float(df["atr_14"].iloc[-1])
@@ -108,13 +122,29 @@ def calculate_entry_exit(df: pd.DataFrame, signal: int) -> dict:
         exit_price = entry_price
         stop_loss = entry_price
 
-    profit_margin_pct = abs(exit_price - entry_price) / entry_price * 100
+    # Gross profit as % of entry price
+    gross_profit_pct = abs(exit_price - entry_price) / entry_price * 100
+
+    # Fees are charged on order value for each leg (entry + exit)
+    fees_pct = TAKER_FEE * (entry_price + exit_price) / entry_price * 100
+
+    profit_after_fees_pct = gross_profit_pct - fees_pct
+
+    # Tax is only applied to gains, not losses
+    tax_pct = max(profit_after_fees_pct, 0.0) * TAX_RATE
+
+    net_profit_pct = profit_after_fees_pct - tax_pct
 
     return {
         "entry_price": entry_price,
         "exit_price": exit_price,
         "stop_loss": stop_loss,
-        "profit_margin_pct": profit_margin_pct,
+        "gross_profit_pct": gross_profit_pct,
+        "profit_margin_pct": gross_profit_pct,   # backward-compat alias
+        "fees_pct": fees_pct,
+        "profit_after_fees_pct": profit_after_fees_pct,
+        "tax_pct": tax_pct,
+        "net_profit_pct": net_profit_pct,
         "atr": atr,
     }
 

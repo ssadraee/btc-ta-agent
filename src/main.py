@@ -44,7 +44,13 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
-from signals import aggregate_signals, build_explanation, calculate_entry_exit, get_signal_horizon
+from signals import (
+    MIN_NET_PROFIT_PCT,
+    aggregate_signals,
+    build_explanation,
+    calculate_entry_exit,
+    get_signal_horizon,
+)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -206,45 +212,55 @@ def main(dry_run: bool = False, force: bool = False) -> None:
     elif not should_send_signal(history, final_signal, final_confidence) and not force:
         logger.info("Signal suppressed by cooldown")
     else:
-        explanation = build_explanation(raw_signals, dfs)
         prices = calculate_entry_exit(dfs["1h"], final_signal)
 
-        entry_usd = prices["entry_price"]
-        exit_usd = prices["exit_price"]
-        stop_loss_usd = prices["stop_loss"]
-
-        message = format_signal_message(
-            signal=final_signal,
-            entry_usd=entry_usd,
-            exit_usd=exit_usd,
-            stop_loss_usd=stop_loss_usd,
-            entry_eur=usd_to_eur(entry_usd, eur_usd_rate),
-            exit_eur=usd_to_eur(exit_usd, eur_usd_rate),
-            stop_loss_eur=usd_to_eur(stop_loss_usd, eur_usd_rate),
-            profit_pct=prices["profit_margin_pct"],
-            explanation=explanation,
-            confidence=final_confidence,
-            timeframes_summary=timeframes_summary,
-            signal_horizon=signal_horizon,
-        )
-
-        if dry_run:
-            print("\n" + "=" * 60)
-            print("DRY RUN — Telegram message would be:")
-            print("=" * 60)
-            print(message)
-            print("=" * 60 + "\n")
+        if prices["net_profit_pct"] < MIN_NET_PROFIT_PCT and not force:
+            logger.info(
+                "Net profit too low (%.2f%% < %.1f%% after fees & tax) — skipping notification",
+                prices["net_profit_pct"], MIN_NET_PROFIT_PCT,
+            )
         else:
-            sent = send_telegram(telegram_token, telegram_chat_id, message)
-            if sent:
-                history = record_signal(
-                    history,
-                    signal=final_signal,
-                    entry_price_usd=entry_usd,
-                    exit_price_target_usd=exit_usd,
-                    timeframes_summary=timeframes_summary,
-                    confidence=final_confidence,
-                )
+            explanation = build_explanation(raw_signals, dfs)
+
+            entry_usd = prices["entry_price"]
+            exit_usd = prices["exit_price"]
+            stop_loss_usd = prices["stop_loss"]
+
+            message = format_signal_message(
+                signal=final_signal,
+                entry_usd=entry_usd,
+                exit_usd=exit_usd,
+                stop_loss_usd=stop_loss_usd,
+                entry_eur=usd_to_eur(entry_usd, eur_usd_rate),
+                exit_eur=usd_to_eur(exit_usd, eur_usd_rate),
+                stop_loss_eur=usd_to_eur(stop_loss_usd, eur_usd_rate),
+                gross_profit_pct=prices["gross_profit_pct"],
+                fees_pct=prices["fees_pct"],
+                tax_pct=prices["tax_pct"],
+                net_profit_pct=prices["net_profit_pct"],
+                explanation=explanation,
+                confidence=final_confidence,
+                timeframes_summary=timeframes_summary,
+                signal_horizon=signal_horizon,
+            )
+
+            if dry_run:
+                print("\n" + "=" * 60)
+                print("DRY RUN — Telegram message would be:")
+                print("=" * 60)
+                print(message)
+                print("=" * 60 + "\n")
+            else:
+                sent = send_telegram(telegram_token, telegram_chat_id, message)
+                if sent:
+                    history = record_signal(
+                        history,
+                        signal=final_signal,
+                        entry_price_usd=entry_usd,
+                        exit_price_target_usd=exit_usd,
+                        timeframes_summary=timeframes_summary,
+                        confidence=final_confidence,
+                    )
 
     # ------------------------------------------------------------------
     # Step 8: Persist signal history
