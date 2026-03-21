@@ -171,22 +171,90 @@ def _gamma_fetch_updown() -> list[dict]:
 
 
 def _gamma_fetch_thresholds() -> list[dict]:
-    """Fetch long-term BTC price threshold markets from Gamma events."""
-    resp = requests.get(
-        f"{GAMMA_API_URL}/events",
-        params={"active": "true", "closed": "false", "limit": 50},
-        timeout=REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    events = resp.json()
+    """Fetch long-term BTC price threshold markets from Gamma events.
 
+    Uses multiple discovery strategies since the generic /events endpoint
+    may not include BTC events in the first page of results.
+    """
+    markets = []
+
+    # Strategy 1: Query events filtered by tag (most targeted)
+    for tag in ["crypto", "bitcoin", "btc"]:
+        try:
+            resp = requests.get(
+                f"{GAMMA_API_URL}/events",
+                params={"active": "true", "closed": "false", "limit": 50, "tag": tag},
+                timeout=REQUEST_TIMEOUT,
+            )
+            if resp.status_code == 200:
+                events = resp.json()
+                found = _extract_btc_threshold_events(events)
+                if found:
+                    logger.debug("Gamma thresholds via tag=%s: %d markets", tag, len(found))
+                    markets.extend(found)
+                    break
+        except Exception:
+            continue
+
+    # Strategy 2: Query markets directly with slug pattern
+    if not markets:
+        for slug_pattern in [
+            "what-price-will-bitcoin",
+            "bitcoin-price",
+            "btc-price",
+        ]:
+            try:
+                resp = requests.get(
+                    f"{GAMMA_API_URL}/markets",
+                    params={
+                        "active": "true",
+                        "closed": "false",
+                        "limit": 50,
+                        "slug_contains": slug_pattern,
+                    },
+                    timeout=REQUEST_TIMEOUT,
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    items = data if isinstance(data, list) else [data]
+                    for mkt in items:
+                        parsed = _parse_threshold_market(mkt)
+                        if parsed:
+                            markets.append(parsed)
+                    if markets:
+                        logger.debug(
+                            "Gamma thresholds via slug_contains=%s: %d markets",
+                            slug_pattern, len(markets),
+                        )
+                        break
+            except Exception:
+                continue
+
+    # Strategy 3: Generic events endpoint (fallback)
+    if not markets:
+        try:
+            resp = requests.get(
+                f"{GAMMA_API_URL}/events",
+                params={"active": "true", "closed": "false", "limit": 100},
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            events = resp.json()
+            markets = _extract_btc_threshold_events(events)
+        except Exception:
+            pass
+
+    return markets
+
+
+def _extract_btc_threshold_events(events: list[dict]) -> list[dict]:
+    """Filter and parse BTC price threshold markets from a list of events."""
     markets = []
     for event in events:
         slug = event.get("slug", "").lower()
         title = event.get("title", "").lower()
         # Match BTC price prediction events
-        if not (("bitcoin" in slug or "btc" in slug or "bitcoin" in title or "btc" in title)
-                and ("price" in slug or "price" in title or "hit" in title)):
+        if not _is_btc_price_event(slug, title):
             continue
 
         # Events contain nested markets
@@ -197,6 +265,14 @@ def _gamma_fetch_thresholds() -> list[dict]:
                 markets.append(parsed)
 
     return markets
+
+
+def _is_btc_price_event(slug: str, title: str) -> bool:
+    """Check if an event is a BTC price prediction event."""
+    text = f"{slug} {title}"
+    has_btc = "bitcoin" in text or "btc" in text
+    has_price = any(kw in text for kw in ["price", "hit", "reach", "above", "below"])
+    return has_btc and has_price
 
 
 # ---------------------------------------------------------------------------
