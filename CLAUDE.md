@@ -57,7 +57,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 5. Per-timeframe XGBoost predictions → (signal, confidence)
 6. Weighted aggregation: 1d=40%, 4h=35%, 1h=25% (`signals.py`)
 7. Evaluate past signal outcomes (24h delay) → retrain if 10+ new evals
-8. Send Telegram notification (if actionable) → persist signal history
+8. Send Telegram notification (if actionable: confidence ≥ 55%, net profit after fees & tax ≥ 1%) → persist signal history
 
 ## Key Constants
 
@@ -71,6 +71,10 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 | `SIGNAL_THRESHOLD` | 0.40 | `signals.py` |
 | `ATR_EXIT_MULTIPLIER` | 2.0 | `signals.py` |
 | `ATR_STOP_MULTIPLIER` | 1.5 | `signals.py` |
+| `ENTRY_FEE_RATE` | 0.0025 (0.25%) | `signals.py` |
+| `EXIT_FEE_RATE` | 0.0040 (0.40%) | `signals.py` |
+| `TAX_RATE` | 0.30 (30%) | `signals.py` |
+| `MIN_NET_PROFIT_PCT` | 1.0 (1%) | `signals.py` |
 | `EVALUATION_DELAY_HOURS` | 24 | `learning.py` |
 | `RETRAIN_THRESHOLD` | 10 | `learning.py` |
 | `OUTCOME_THRESHOLD` | 0.01 (1%) | `learning.py` |

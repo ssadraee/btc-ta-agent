@@ -26,6 +26,14 @@ _ATR_EXIT_MULTIPLIER_DEFAULT = 2.0
 # Stop loss is set at this fraction of the exit multiplier (risk/reward ≈ 1:1.33)
 _ATR_STOP_RATIO = 0.75
 
+# Trading cost & tax parameters
+ENTRY_FEE_RATE = 0.0025   # 0.25% fee on order value at entry
+EXIT_FEE_RATE = 0.0040    # 0.40% fee on order value at exit
+TAX_RATE = 0.30           # 30% tax applied to net profit (if positive)
+
+# Minimum net profit after fees and tax to generate a signal
+MIN_NET_PROFIT_PCT = 1.0
+
 SIGNAL_NAMES = {1: "BUY", 0: "HOLD", -1: "SELL"}
 
 # Expected lookahead per timeframe (candles × candle size)
@@ -82,6 +90,40 @@ def aggregate_signals(
     )
 
     return final_signal, weighted_confidence, timeframe_summary
+
+
+def _compute_net_profit(entry_price: float, exit_price: float, signal: int) -> dict:
+    """
+    Compute net profit after trading fees and capital gains tax.
+
+    Args:
+        entry_price: price at which the trade is entered
+        exit_price: target price at which the trade is exited
+        signal: 1=BUY, -1=SELL
+
+    Returns:
+        dict with gross_profit_pct, entry_fee_pct, exit_fee_pct,
+        tax_pct, net_profit_pct  — all expressed as % of entry_price.
+    """
+    if signal == 1:  # BUY: buy at entry, sell at exit
+        gross_gain = exit_price - entry_price
+    else:  # SELL/short: sell at entry, buy back at exit
+        gross_gain = entry_price - exit_price
+
+    entry_fee = entry_price * ENTRY_FEE_RATE
+    exit_fee = exit_price * EXIT_FEE_RATE
+    net_gain = gross_gain - entry_fee - exit_fee
+    tax = max(0.0, net_gain) * TAX_RATE
+    net_profit = net_gain - tax
+
+    base = entry_price
+    return {
+        "gross_profit_pct": gross_gain / base * 100,
+        "entry_fee_pct": entry_fee / base * 100,
+        "exit_fee_pct": exit_fee / base * 100,
+        "tax_pct": tax / base * 100,
+        "net_profit_pct": net_profit / base * 100,
+    }
 
 
 def compute_dynamic_exit_multiplier(df: pd.DataFrame, lookahead: int = 24) -> float:
@@ -160,13 +202,17 @@ def calculate_entry_exit(
         exit_price = entry_price
         stop_loss = entry_price
 
-    profit_margin_pct = abs(exit_price - entry_price) / entry_price * 100
+    profit = _compute_net_profit(entry_price, exit_price, signal)
 
     return {
         "entry_price": entry_price,
         "exit_price": exit_price,
         "stop_loss": stop_loss,
-        "profit_margin_pct": profit_margin_pct,
+        "profit_margin_pct": profit["gross_profit_pct"],  # gross, kept for compatibility
+        "net_profit_pct": profit["net_profit_pct"],
+        "entry_fee_pct": profit["entry_fee_pct"],
+        "exit_fee_pct": profit["exit_fee_pct"],
+        "tax_pct": profit["tax_pct"],
         "atr": atr,
         "exit_multiplier_used": mult,
     }
