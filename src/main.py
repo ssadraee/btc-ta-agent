@@ -44,7 +44,7 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
-from signals import aggregate_signals, build_explanation, calculate_entry_exit
+from signals import aggregate_signals, build_explanation, calculate_entry_exit, get_signal_horizon
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -137,6 +137,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
         logger.info("  [%s] signal: %s (confidence: %.1f%%)", tf, signal_name, confidence * 100)
 
     final_signal, final_confidence, timeframes_summary = aggregate_signals(raw_signals)
+    signal_horizon = get_signal_horizon(raw_signals)
     signal_name = {1: "BUY", 0: "HOLD", -1: "SELL"}[final_signal]
     logger.info(
         "Aggregate signal: %s (confidence: %.1f%%)",
@@ -224,6 +225,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
             explanation=explanation,
             confidence=final_confidence,
             timeframes_summary=timeframes_summary,
+            signal_horizon=signal_horizon,
         )
 
         if dry_run:

@@ -26,6 +26,10 @@ ATR_STOP_MULTIPLIER = 1.5
 
 SIGNAL_NAMES = {1: "BUY", 0: "HOLD", -1: "SELL"}
 
+# Expected lookahead per timeframe (candles × candle size)
+# 1h: 6 candles × 1h = 6h  |  4h: 6 candles × 4h = 24h  |  1d: 5 candles × 1d = 5 days
+LOOKAHEAD_HOURS = {"1h": 6, "4h": 24, "1d": 120}
+
 
 def aggregate_signals(
     signals: dict[str, tuple[int, float]]
@@ -240,3 +244,30 @@ def build_explanation(
             unique_sentences.append(s)
 
     return " ".join(unique_sentences[:8])  # Cap at 8 sentences for readability
+
+
+def get_signal_horizon(signals: dict[str, tuple[int, float]]) -> str:
+    """
+    Return a human-readable time horizon for the signal.
+
+    Based on the highest-weight timeframe that contributes a directional
+    (non-HOLD) signal with sufficient confidence. Models were trained on:
+        1h  → 6 candles = 6 hours
+        4h  → 6 candles = 24 hours
+        1d  → 5 candles = 5 days
+
+    Args:
+        signals: {"1h": (signal, confidence), "4h": ..., "1d": ...}
+
+    Returns:
+        Human-readable horizon string, e.g. "1–5 days"
+    """
+    directional = [
+        tf for tf, (sig, conf) in signals.items()
+        if sig != 0 and conf >= MIN_CONFIDENCE
+    ]
+    # Check in descending weight order (1d=0.40 > 4h=0.35 > 1h=0.25)
+    for tf in ["1d", "4h", "1h"]:
+        if tf in directional:
+            return {"1d": "1–5 days", "4h": "12–24 hours", "1h": "up to 6 hours"}[tf]
+    return "1–5 days"  # fallback: daily model has highest weight
