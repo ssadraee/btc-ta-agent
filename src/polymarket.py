@@ -143,29 +143,60 @@ def _fetch_via_gamma() -> tuple[list[dict], list[dict]]:
 
 
 def _gamma_fetch_updown() -> list[dict]:
-    """Fetch short-term BTC Up/Down markets via slug generation."""
+    """Fetch short-term BTC Up/Down markets via slug generation + broad search."""
     now_ts = int(time.time())
     markets = []
+    seen_slugs: set[str] = set()
 
+    # 1. Fast O(1) lookups by exact slug for current intervals
     for interval in UPDOWN_INTERVALS:
         secs = _INTERVAL_SECONDS[interval]
         rounded_ts = (now_ts // secs) * secs
         slug = f"btc-updown-{interval}-{rounded_ts}"
 
+        try:
+            resp = requests.get(
+                f"{GAMMA_API_URL}/markets",
+                params={"slug": slug},
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                parsed = _parse_updown_market(item, interval)
+                if parsed:
+                    markets.append(parsed)
+                    seen_slugs.add(slug)
+        except Exception:
+            logger.debug("Gamma slug lookup failed for %s", slug)
+
+    # 2. Broader search via /markets with Crypto tag to catch additional markets
+    try:
         resp = requests.get(
             f"{GAMMA_API_URL}/markets",
-            params={"slug": slug},
+            params={"active": "true", "closed": "false", "limit": 50,
+                    "tag_id": 21},
             timeout=REQUEST_TIMEOUT,
         )
         resp.raise_for_status()
         data = resp.json()
 
-        # Response may be a list or a single object
-        items = data if isinstance(data, list) else [data]
+        items = data if isinstance(data, list) else []
         for item in items:
+            item_slug = (item.get("slug") or "").lower()
+            if "btc-updown" not in item_slug:
+                continue
+            if item_slug in seen_slugs:
+                continue
+            interval = _extract_interval_from_slug(item_slug)
             parsed = _parse_updown_market(item, interval)
             if parsed:
                 markets.append(parsed)
+                seen_slugs.add(item_slug)
+    except Exception:
+        logger.debug("Gamma broad updown search failed", exc_info=True)
 
     return markets
 
@@ -174,19 +205,20 @@ def _gamma_fetch_thresholds() -> list[dict]:
     """Fetch long-term BTC price threshold markets from Gamma events."""
     resp = requests.get(
         f"{GAMMA_API_URL}/events",
-        params={"active": "true", "closed": "false", "limit": 50},
+        params={"active": "true", "closed": "false", "limit": 50, "tag_id": 21},
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
     events = resp.json()
 
     markets = []
+    price_keywords = ("price", "hit", "reach", "above", "below", "end")
     for event in events:
         slug = event.get("slug", "").lower()
         title = event.get("title", "").lower()
         # Match BTC price prediction events
         if not (("bitcoin" in slug or "btc" in slug or "bitcoin" in title or "btc" in title)
-                and ("price" in slug or "price" in title or "hit" in title)):
+                and any(kw in slug or kw in title for kw in price_keywords)):
             continue
 
         # Events contain nested markets
