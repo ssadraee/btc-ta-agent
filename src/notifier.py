@@ -249,36 +249,61 @@ def _format_polymarket_section(polymarket: dict | None) -> str:
 
     if sig > 0.05:
         direction = "Bullish"
-        dir_icon = "▲"
+        overall_icon = "▲"
     elif sig < -0.05:
         direction = "Bearish"
-        dir_icon = "▼"
+        overall_icon = "▼"
     else:
         direction = "Neutral"
-        dir_icon = "◆"
+        overall_icon = "◆"
+
+    # Convert normalised signal [-1, 1] back to implied price move percentage.
+    # signal = clamp(expected_move * 10, -1, 1), so move = signal * 10 (%).
+    # When |signal| == 1.0 the value was clamped, so we show ≥10%.
+    overall_pct = _signal_to_pct_label(sig)
 
     lines = [
-        f"🔮 <b>Polymarket Sentiment:</b> {direction} ({conf:.0%} confidence, {market_count} markets)\n"
+        f"🔮 <b>Polymarket Sentiment:</b> {overall_icon} {direction}\n",
+        f"   Prediction markets imply <b>{overall_pct} price move</b> "
+        f"({market_count} active bets, {conf:.0%} confidence)\n",
     ]
 
     horizon_labels = {
-        "short":  "Short-term  (≤24h)",
-        "medium": "Medium-term (1–7d)",
-        "long":   "Long-term   (7–60d)",
-        "macro":  "Macro       (>60d)",
+        "short":  "Next 24 h ",
+        "medium": "Next 7 d  ",
+        "long":   "Next 60 d ",
+        "macro":  "Long-term ",
     }
     horizons = polymarket.get("horizons", {})
+    any_horizon = False
     for horizon_key in ("short", "medium", "long", "macro"):
         if horizon_key not in horizons:
             continue
         h_sig, h_conf, h_n = horizons[horizon_key]
         if h_n == 0:
             continue
+        if not any_horizon:
+            lines.append("   <i>By time horizon:</i>\n")
+            any_horizon = True
         arrow = "▲" if h_sig > 0.05 else "▼" if h_sig < -0.05 else "◆"
+        pct_label = _signal_to_pct_label(h_sig)
         label = horizon_labels[horizon_key]
         lines.append(
-            f"   {arrow} {label}: {h_sig:+.2f} ({h_n} market{'s' if h_n != 1 else ''})\n"
+            f"   {arrow} {label}: {pct_label} implied  "
+            f"<i>({h_n} bet{'s' if h_n != 1 else ''})</i>\n"
         )
 
     lines.append("\n")
     return "".join(lines)
+
+
+def _signal_to_pct_label(signal: float) -> str:
+    """
+    Convert a normalised [-1, 1] Polymarket signal to a human-readable
+    percentage string, e.g. '+4.1%' or '≥+10%' when clamped.
+    """
+    pct = signal * 10  # signal = clamp(move * 10), so move (%) = signal * 10
+    if abs(signal) >= 0.999:
+        prefix = "≥" if pct > 0 else "≤"
+        return f"{prefix}{pct:+.0f}%".replace("+-", "-").replace("++", "+")
+    return f"{pct:+.1f}%"
