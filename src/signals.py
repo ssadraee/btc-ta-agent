@@ -13,7 +13,7 @@ from indicators import get_latest_indicator_summary
 logger = logging.getLogger(__name__)
 
 # Timeframe weights: longer timeframes carry more influence
-TIMEFRAME_WEIGHTS = {"1h": 0.25, "4h": 0.35, "1d": 0.40}
+TIMEFRAME_WEIGHTS = {"1h": 0.25, "4h": 0.35, "1d": 0.40, "polymarket": 0.15}
 
 # Minimum confidence per timeframe to contribute to the aggregate
 MIN_CONFIDENCE = 0.45

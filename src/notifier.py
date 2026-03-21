@@ -64,6 +64,8 @@ def format_signal_message(
     confidence: float,
     timeframes_summary: str,
     signal_horizon: str = "1–5 days",
+    polymarket_summary: str | None = None,
+    polymarket_source: str | None = None,
 ) -> str:
     """
     Build an HTML-formatted Telegram message for a trading signal.
@@ -107,8 +109,32 @@ def format_signal_message(
         "\n"
         f"⏱ <b>Timeframes:</b> {timeframes_summary}\n"
         f"🧭 <b>Signal Horizon:</b> ~{signal_horizon}\n"
+    )
+
+    if polymarket_summary:
+        # Indent each line of the multi-line summary
+        indented = polymarket_summary.replace("\n", "\n   ")
+        message += (
+            f"\n"
+            f"🔮 <b>Market Sentiment (Polymarket):</b>\n"
+            f"   {indented}\n"
+        )
+
+    if polymarket_summary:
+        confidence_note = (
+            "Weighted model certainty across 3 timeframes + Polymarket sentiment. "
+            "Higher = stronger agreement."
+        )
+    else:
+        confidence_note = (
+            "Weighted model certainty across all 3 timeframes "
+            "(1d 40% · 4h 35% · 1h 25%). Higher = stronger agreement."
+        )
+
+    message += (
+        f"\n"
         f"📊 <b>Confidence:</b> {confidence_pct}% {confidence_bar}\n"
-        f"<i>Weighted model certainty across all 3 timeframes (1d 40% · 4h 35% · 1h 25%). Higher = stronger agreement.</i>\n"
+        f"<i>{confidence_note}</i>\n"
         "\n"
         f"⚠️ <i>This is not financial advice. Always manage your risk and never invest more than you can afford to lose.</i>"
     )
