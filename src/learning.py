@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 HISTORY_PATH = "data/signal_history.json"
 EVALUATION_DELAY_HOURS = 24
 RETRAIN_THRESHOLD = 10   # Retrain after this many new evaluations
-OUTCOME_THRESHOLD = 0.01  # 1% move to count as correct (more lenient than label threshold)
+OUTCOME_THRESHOLD = 0.02  # 2% move to count as correct (matches label threshold)
 MIN_ACCURACY_FOR_SKIP = 0.65  # Skip retraining if recent accuracy is above this
 ERROR_WEIGHT_MULTIPLIER = 2.0  # Training weight boost for time periods with incorrect signals
 
@@ -240,6 +240,51 @@ def get_outcome_weights(history: list[dict]) -> dict[str, float]:
             weight = ERROR_WEIGHT_MULTIPLIER if r["outcome"] == "incorrect" else 1.0
             weights[ts] = weight
     return weights
+
+
+def compute_learned_exit_multiplier(history: list[dict]) -> float | None:
+    """
+    Derive a learned exit multiplier adjustment from past signal outcomes.
+
+    For each evaluated signal, computes how much of the exit target was actually
+    reached: ratio = actual_move / target_move.
+
+    Returns the mean ratio (>1 = targets undershot, so raise multiplier;
+    <1 = targets overshot, so lower it), or None if fewer than 5 records exist.
+    """
+    import numpy as np
+
+    eligible = [
+        r for r in history
+        if r.get("evaluated")
+        and r.get("outcome_price_usd") is not None
+        and r.get("entry_price_usd") is not None
+        and r.get("exit_price_target_usd") is not None
+    ]
+    if len(eligible) < 5:
+        return None
+
+    ratios = []
+    for r in eligible:
+        entry = r["entry_price_usd"]
+        target = r["exit_price_target_usd"]
+        outcome = r["outcome_price_usd"]
+        signal = r["signal"]
+
+        target_move = abs(target - entry)
+        if target_move <= 0:
+            continue
+        if signal == 1:
+            actual_move = outcome - entry
+        else:
+            actual_move = entry - outcome
+
+        ratios.append(actual_move / target_move)
+
+    if not ratios:
+        return None
+
+    return float(np.mean(ratios))
 
 
 def mark_used_for_training(history: list[dict]) -> list[dict]:

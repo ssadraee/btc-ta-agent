@@ -28,6 +28,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from data_fetcher import fetch_historical, fetch_ohlcv, get_eur_usd_rate, usd_to_eur
 from indicators import compute_features
 from learning import (
+    compute_learned_exit_multiplier,
     evaluate_outcomes,
     get_outcome_weights,
     load_signal_history,
@@ -44,7 +45,7 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
-from signals import aggregate_signals, build_explanation, calculate_entry_exit, get_signal_horizon
+from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_signal_horizon
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -207,7 +208,22 @@ def main(dry_run: bool = False, force: bool = False) -> None:
         logger.info("Signal suppressed by cooldown")
     else:
         explanation = build_explanation(raw_signals, dfs)
-        prices = calculate_entry_exit(dfs["1h"], final_signal)
+
+        # Compute dynamic exit multiplier: blend historical data + learned experience
+        hist_mult = compute_dynamic_exit_multiplier(dfs["1h"])
+        learned_adj = compute_learned_exit_multiplier(history)
+        if learned_adj is not None:
+            # 70% anchored to historical data, 30% adjusted by learned outcomes
+            blended_mult = hist_mult * (0.7 + 0.3 * learned_adj)
+            logger.info(
+                "Exit multiplier: hist=%.2f, learned_adj=%.2f → blended=%.2f",
+                hist_mult, learned_adj, blended_mult,
+            )
+        else:
+            blended_mult = hist_mult
+            logger.info("Exit multiplier (historical only): %.2f", blended_mult)
+
+        prices = calculate_entry_exit(dfs["1h"], final_signal, exit_multiplier=blended_mult)
 
         entry_usd = prices["entry_price"]
         exit_usd = prices["exit_price"]
