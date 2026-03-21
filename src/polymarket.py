@@ -144,6 +144,14 @@ def _fetch_via_gamma() -> tuple[list[dict], list[dict]]:
     """Fetch from the Gamma API (richest metadata)."""
     updown = _gamma_fetch_updown()
     thresholds = _gamma_fetch_thresholds()
+    # Also search /markets directly to catch standalone BTC markets not inside events
+    direct = _gamma_fetch_markets_direct()
+    seen_titles = {m.get("title", "") for m in thresholds}
+    for m in direct:
+        t = m.get("title", "")
+        if t not in seen_titles:
+            thresholds.append(m)
+            seen_titles.add(t)
     return updown, thresholds
 
 
@@ -205,54 +213,102 @@ def _gamma_fetch_updown() -> list[dict]:
 
 
 def _gamma_fetch_thresholds() -> list[dict]:
-    """Fetch long-term BTC price threshold markets from Gamma events."""
+    """
+    Fetch BTC price threshold markets from Gamma events.
+
+    Searches with both "bitcoin" and "btc" keywords and paginates fully.
+    The event-level filter only requires a BTC identifier in the event title
+    or slug — no price-keyword check at the event level, because event titles
+    are often generic (e.g. "Bitcoin March 2026") even when their nested
+    markets are price-prediction markets.  The parser handles quality filtering.
+    """
     limit = 200
-    offset = 0
-    all_events: list[dict] = []
-    for _ in range(10):  # safety cap: 10 pages = up to 2000 events
-        resp = requests.get(
-            f"{GAMMA_API_URL}/events",
-            params={
-                "active": "true",
-                "closed": "false",
-                "limit": limit,
-                "offset": offset,
-                "keyword": "bitcoin",
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        page = resp.json()
-        if not isinstance(page, list):
-            break
-        all_events.extend(page)
-        if len(page) < limit:
-            break
-        offset += limit
+    seen_questions: set[str] = set()
+    markets: list[dict] = []
 
-    markets = []
-    for event in all_events:
-        slug = event.get("slug", "").lower()
-        title = event.get("title", "").lower()
-        # Match BTC price prediction events — accept any directional/price keyword
-        is_btc = "bitcoin" in slug or "btc" in slug or "bitcoin" in title or "btc" in title
-        is_price_market = (
-            "price" in slug or "price" in title
-            or "hit" in title or "hit" in slug
-            or "above" in title or "above" in slug
-            or "below" in title or "below" in slug
-            or "reach" in title or "reach" in slug
-            or "will" in title
-        )
-        if not (is_btc and is_price_market):
+    for keyword in ["bitcoin", "btc"]:
+        offset = 0
+        for _ in range(10):  # safety cap: 10 pages = up to 2000 events per keyword
+            resp = requests.get(
+                f"{GAMMA_API_URL}/events",
+                params={
+                    "active": "true",
+                    "closed": "false",
+                    "limit": limit,
+                    "offset": offset,
+                    "keyword": keyword,
+                },
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            page = resp.json()
+            if not isinstance(page, list):
+                break
+
+            for event in page:
+                slug = event.get("slug", "").lower()
+                title = event.get("title", "").lower()
+                # Require only a BTC identifier — event titles like "Bitcoin March 2026"
+                # would be dropped by an additional price-keyword filter even though their
+                # nested markets are valid price-prediction markets.
+                if not ("bitcoin" in slug or "btc" in slug
+                        or "bitcoin" in title or "btc" in title):
+                    continue
+                # Updown markets are handled by _gamma_fetch_updown
+                if "updown" in slug:
+                    continue
+
+                for mkt in event.get("markets", []):
+                    question = mkt.get("question", "") or mkt.get("groupItemTitle", "")
+                    if question in seen_questions:
+                        continue
+                    parsed = _parse_threshold_market(mkt)
+                    if parsed:
+                        seen_questions.add(question)
+                        markets.append(parsed)
+
+            if len(page) < limit:
+                break
+            offset += limit
+
+    return markets
+
+
+def _gamma_fetch_markets_direct() -> list[dict]:
+    """
+    Search the Gamma /markets endpoint directly for BTC price markets.
+
+    Complements _gamma_fetch_thresholds by catching standalone markets that
+    are not grouped under a named event, or markets whose event slug does not
+    contain a BTC identifier.
+    """
+    seen_questions: set[str] = set()
+    markets: list[dict] = []
+
+    for keyword in ["bitcoin", "btc"]:
+        try:
+            resp = requests.get(
+                f"{GAMMA_API_URL}/markets",
+                params={"active": "true", "closed": "false", "limit": 200, "keyword": keyword},
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            items = data if isinstance(data, list) else ([data] if isinstance(data, dict) else [])
+            for mkt in items:
+                slug = (mkt.get("slug") or "").lower()
+                question = mkt.get("question", "") or ""
+                # Updown markets handled separately
+                if "updown" in slug:
+                    continue
+                if question in seen_questions:
+                    continue
+                parsed = _parse_threshold_market(mkt)
+                if parsed:
+                    seen_questions.add(question)
+                    markets.append(parsed)
+        except Exception:
             continue
-
-        # Events contain nested markets
-        event_markets = event.get("markets", [])
-        for mkt in event_markets:
-            parsed = _parse_threshold_market(mkt)
-            if parsed:
-                markets.append(parsed)
 
     return markets
 
