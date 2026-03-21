@@ -56,6 +56,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          BITQUERY_API_KEY: ${{ secrets.BITQUERY_API_KEY }}
         run: |
           DRY_RUN_FLAG=""
           FORCE_FLAG=""

@@ -1,15 +1,23 @@
 """
 Polymarket sentiment analysis for BTC trading signals.
 
-Fetches prediction market data from Polymarket's public API and derives a
-directional signal from the implied median expected BTC price across multiple
-time horizons (short ≤24h, medium 1–7d, long 7–60d, macro >60d).
+Fetches prediction market data from Polymarket and derives a directional signal
+from the implied median expected BTC price across multiple time horizons
+(short ≤24h, medium 1–7d, long 7–60d, macro >60d).
 
-No API key required — Polymarket's gamma API is publicly accessible.
+Data source priority:
+  1. Bitquery GraphQL API (cloud-accessible; set BITQUERY_API_KEY env var).
+     Polymarket's gamma REST API is geo-blocked on cloud providers (GitHub
+     Actions, AWS, GCP) by Cloudflare IP-based restrictions.
+  2. Polymarket gamma REST API (fallback for local dev where geo-block may not
+     apply, or when BITQUERY_API_KEY is not configured).
+
+Free Bitquery account: https://bitquery.io
 """
 
 import json
 import logging
+import os
 import re
 from datetime import datetime, timezone
 
@@ -18,6 +26,38 @@ import requests
 logger = logging.getLogger(__name__)
 
 POLYMARKET_API = "https://gamma-api.polymarket.com/markets"
+BITQUERY_API = "https://streaming.bitquery.io/graphql"
+
+# GraphQL query for active BTC prediction markets on Polymarket via Bitquery.
+# Bitquery indexes Polymarket smart-contract events on Polygon and exposes
+# them as a structured dataset. LastPrice of the YES/NO outcome tokens equals
+# the current market probability (0–1).
+_BITQUERY_QUERY = """
+query PolymarketBTCMarkets {
+  Polymarket {
+    Markets(
+      where: {
+        Market: {
+          Active: { is: true }
+          Question: { includesAnyOf: ["Bitcoin", "BTC"] }
+        }
+      }
+      limit: { count: 50 }
+    ) {
+      Market {
+        Question
+        ConditionID
+        EndTime
+        Volume
+        OutcomeTokens {
+          Outcome
+          LastPrice
+        }
+      }
+    }
+  }
+}
+"""
 
 # Horizon classification thresholds (hours from now)
 _HORIZON_HOURS = {
@@ -51,9 +91,15 @@ _PRICE_RE = re.compile(
 # Public API
 # ---------------------------------------------------------------------------
 
-def fetch_polymarket_sentiment(current_price_usd: float) -> dict:
+def fetch_polymarket_sentiment(
+    current_price_usd: float,
+    bitquery_key: str | None = None,
+) -> dict:
     """
     Fetch BTC prediction markets from Polymarket and derive a directional signal.
+
+    Tries Bitquery first (cloud-accessible) then falls back to the gamma REST
+    API (works locally but geo-blocked on cloud providers).
 
     The signal is derived from the implied median expected BTC price:
       - Collect (target_price, yes_prob) pairs from "Will BTC be above $X?" markets
@@ -64,6 +110,7 @@ def fetch_polymarket_sentiment(current_price_usd: float) -> dict:
 
     Args:
         current_price_usd: Latest BTC price in USD (used for signal direction).
+        bitquery_key: Bitquery API key. If None, reads BITQUERY_API_KEY env var.
 
     Returns:
         dict with keys:
@@ -73,8 +120,11 @@ def fetch_polymarket_sentiment(current_price_usd: float) -> dict:
           summary      str    Human-readable one-liner
           market_count int    Total usable markets found
     """
+    if bitquery_key is None:
+        bitquery_key = os.getenv("BITQUERY_API_KEY")
+
     try:
-        markets = _fetch_markets()
+        markets = _fetch_markets(bitquery_key)
     except Exception as e:
         logger.warning("Polymarket fetch failed: %s", e)
         return _empty_result("Polymarket data unavailable")
@@ -144,8 +194,85 @@ def fetch_polymarket_sentiment(current_price_usd: float) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-def _fetch_markets() -> list[dict]:
-    """Fetch active BTC prediction markets from Polymarket gamma API."""
+def _fetch_markets_bitquery(api_key: str) -> list[dict]:
+    """
+    Fetch active BTC prediction markets from Polymarket via Bitquery GraphQL.
+
+    Bitquery indexes Polymarket data from the Polygon blockchain and is
+    accessible from cloud environments (no geo-block). The response is
+    normalised to the same dict shape used by the gamma REST API so all
+    downstream parsing logic is unchanged.
+
+    Raises requests.HTTPError or ValueError on failure so the caller can fall
+    back to the gamma API.
+    """
+    resp = requests.post(
+        BITQUERY_API,
+        json={"query": _BITQUERY_QUERY},
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        timeout=20,
+    )
+    resp.raise_for_status()
+    body = resp.json()
+
+    if "errors" in body:
+        raise ValueError(f"Bitquery GraphQL errors: {body['errors']}")
+
+    markets_raw = (
+        body.get("data", {})
+            .get("Polymarket", {})
+            .get("Markets", [])
+    )
+
+    if not markets_raw:
+        logger.warning("Bitquery returned 0 active BTC Polymarket markets")
+        return []
+
+    markets: list[dict] = []
+    for entry in markets_raw:
+        try:
+            mkt = entry["Market"]
+            tokens = mkt.get("OutcomeTokens", [])
+            outcomes = [t["Outcome"] for t in tokens]
+            prices = [str(t["LastPrice"]) for t in tokens]
+            markets.append({
+                "id": mkt.get("ConditionID", ""),
+                "question": mkt.get("Question", ""),
+                "outcomes": json.dumps(outcomes),
+                "outcomePrices": json.dumps(prices),
+                "endDateIso": mkt.get("EndTime", ""),
+                "volume": mkt.get("Volume", 0),
+            })
+        except (KeyError, TypeError) as exc:
+            logger.debug("Skipping malformed Bitquery market entry: %s", exc)
+
+    logger.info("Bitquery: fetched %d BTC Polymarket markets", len(markets))
+    return markets
+
+
+def _fetch_markets(bitquery_key: str | None = None) -> list[dict]:
+    """
+    Fetch active BTC prediction markets.
+
+    Tries Bitquery first when an API key is available (works from cloud),
+    then falls back to the Polymarket gamma REST API (works locally).
+    """
+    if bitquery_key:
+        try:
+            markets = _fetch_markets_bitquery(bitquery_key)
+            if markets:
+                return markets
+            # Zero results from Bitquery — fall through to gamma API
+            logger.warning("Bitquery returned no markets, falling back to gamma API")
+        except Exception as exc:
+            logger.warning(
+                "Bitquery fetch failed (%s) — falling back to Polymarket gamma API", exc
+            )
+
+    # Polymarket gamma REST API (geo-blocked on cloud, fine locally)
     params = {
         "active": "true",
         "closed": "false",
@@ -163,11 +290,10 @@ def _fetch_markets() -> list[dict]:
             resp2 = requests.get(POLYMARKET_API, params=params, timeout=15)
             resp2.raise_for_status()
             extra = resp2.json()
-            # Deduplicate by id
             ids = {m.get("id") for m in markets}
             markets += [m for m in extra if m.get("id") not in ids]
         except Exception:
-            pass  # First batch is sufficient
+            pass
 
     return markets
 
