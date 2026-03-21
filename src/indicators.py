@@ -62,12 +62,12 @@ FEATURE_COLUMNS = [
 
 # Lookahead candles per timeframe for label generation
 LOOKAHEAD_CANDLES = {
-    "1h": 6,   # 6h horizon
+    "1h": 12,  # 12h horizon (was 6h)
     "4h": 6,   # 24h horizon
     "1d": 5,   # 5d horizon
 }
 
-LABEL_THRESHOLD = 0.02  # 2% move required to label as BUY or SELL
+LABEL_THRESHOLD = 0.03  # 3% move required to label as BUY or SELL (was 2%)
 
 
 def compute_features(df: pd.DataFrame) -> pd.DataFrame:

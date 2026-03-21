@@ -5,6 +5,7 @@ and human-readable explanation generation.
 
 import logging
 
+import numpy as np
 import pandas as pd
 
 from indicators import get_latest_indicator_summary
@@ -20,15 +21,16 @@ MIN_CONFIDENCE = 0.45
 # Minimum aggregate weighted score to trigger BUY or SELL
 SIGNAL_THRESHOLD = 0.40
 
-# ATR multipliers for exit and stop-loss calculation
-ATR_EXIT_MULTIPLIER = 2.0
-ATR_STOP_MULTIPLIER = 1.5
+# Fallback ATR exit multiplier (used when insufficient historical data)
+_ATR_EXIT_MULTIPLIER_DEFAULT = 2.0
+# Stop loss is set at this fraction of the exit multiplier (risk/reward ≈ 1:1.33)
+_ATR_STOP_RATIO = 0.75
 
 SIGNAL_NAMES = {1: "BUY", 0: "HOLD", -1: "SELL"}
 
 # Expected lookahead per timeframe (candles × candle size)
-# 1h: 6 candles × 1h = 6h  |  4h: 6 candles × 4h = 24h  |  1d: 5 candles × 1d = 5 days
-LOOKAHEAD_HOURS = {"1h": 6, "4h": 24, "1d": 120}
+# 1h: 12 candles × 1h = 12h  |  4h: 6 candles × 4h = 24h  |  1d: 5 candles × 1d = 5 days
+LOOKAHEAD_HOURS = {"1h": 12, "4h": 24, "1d": 120}
 
 
 def aggregate_signals(
@@ -82,28 +84,78 @@ def aggregate_signals(
     return final_signal, weighted_confidence, timeframe_summary
 
 
-def calculate_entry_exit(df: pd.DataFrame, signal: int) -> dict:
+def compute_dynamic_exit_multiplier(df: pd.DataFrame, lookahead: int = 24) -> float:
+    """
+    Derive the exit multiplier from realized historical move-to-ATR ratios.
+
+    For each candle, computes the maximum favorable price move over the next
+    `lookahead` candles expressed as a multiple of the ATR at that point.
+    Returns the 75th percentile of those ratios — ambitious but grounded in
+    actual BTC behaviour. Falls back to _ATR_EXIT_MULTIPLIER_DEFAULT if the
+    DataFrame has insufficient rows.
+
+    Args:
+        df: feature DataFrame with 'close' and 'atr_14' columns
+        lookahead: candles to look forward (default 24 ≈ 1 trading day on 1h TF)
+    """
+    closes = df["close"].values
+    atrs = df["atr_14"].values
+    n = len(df)
+
+    if n < lookahead + 20:
+        return _ATR_EXIT_MULTIPLIER_DEFAULT
+
+    ratios = []
+    for i in range(n - lookahead - 1):
+        atr = atrs[i]
+        if atr <= 0:
+            continue
+        entry = closes[i]
+        future = closes[i + 1: i + lookahead + 1]
+        max_up = float(max(future)) - entry
+        max_down = entry - float(min(future))
+        max_move = max(max_up, max_down)
+        ratios.append(max_move / atr)
+
+    if not ratios:
+        return _ATR_EXIT_MULTIPLIER_DEFAULT
+
+    return float(np.percentile(ratios, 75))
+
+
+def calculate_entry_exit(
+    df: pd.DataFrame,
+    signal: int,
+    exit_multiplier: float | None = None,
+) -> dict:
     """
     Calculate entry price, exit target, stop-loss, and profit margin.
 
-    Uses ATR-based dynamic targets — a professional risk management standard.
+    Uses a data-driven exit multiplier derived from historical ATR-to-move
+    ratios, optionally refined by past signal outcomes passed in from main.py.
 
     Args:
         df: feature DataFrame (must contain 'close' and 'atr_14' columns)
         signal: 1=BUY, -1=SELL
+        exit_multiplier: pre-computed blended multiplier; if None, computed
+                         on the fly from df via compute_dynamic_exit_multiplier.
 
     Returns:
-        dict with entry_price, exit_price, stop_loss, profit_margin_pct
+        dict with entry_price, exit_price, stop_loss, profit_margin_pct,
+        atr, exit_multiplier_used
     """
     entry_price = float(df["close"].iloc[-1])
     atr = float(df["atr_14"].iloc[-1])
 
+    mult = exit_multiplier if exit_multiplier is not None else compute_dynamic_exit_multiplier(df)
+    stop_mult = mult * _ATR_STOP_RATIO
+
     if signal == 1:  # BUY
-        exit_price = entry_price + (atr * ATR_EXIT_MULTIPLIER)
-        stop_loss = entry_price - (atr * ATR_STOP_MULTIPLIER)
+        exit_price = entry_price + (atr * mult)
+        stop_loss = entry_price - (atr * stop_mult)
     elif signal == -1:  # SELL / Short
-        exit_price = entry_price - (atr * ATR_EXIT_MULTIPLIER)
-        stop_loss = entry_price + (atr * ATR_STOP_MULTIPLIER)
+        exit_price = entry_price - (atr * mult)
+        stop_loss = entry_price + (atr * stop_mult)
     else:
         exit_price = entry_price
         stop_loss = entry_price
@@ -116,6 +168,7 @@ def calculate_entry_exit(df: pd.DataFrame, signal: int) -> dict:
         "stop_loss": stop_loss,
         "profit_margin_pct": profit_margin_pct,
         "atr": atr,
+        "exit_multiplier_used": mult,
     }
 
 
@@ -269,5 +322,5 @@ def get_signal_horizon(signals: dict[str, tuple[int, float]]) -> str:
     # Check in descending weight order (1d=0.40 > 4h=0.35 > 1h=0.25)
     for tf in ["1d", "4h", "1h"]:
         if tf in directional:
-            return {"1d": "1–5 days", "4h": "12–24 hours", "1h": "up to 6 hours"}[tf]
+            return {"1d": "1–5 days", "4h": "12–24 hours", "1h": "up to 12 hours"}[tf]
     return "1–5 days"  # fallback: daily model has highest weight
