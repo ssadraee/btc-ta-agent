@@ -56,6 +56,10 @@ def format_signal_message(
     exit_eur: float,
     stop_loss_eur: float,
     profit_pct: float,
+    net_profit_pct: float,
+    entry_fee_pct: float,
+    exit_fee_pct: float,
+    tax_pct: float,
     explanation: str,
     confidence: float,
     timeframes_summary: str,
@@ -72,11 +76,11 @@ def format_signal_message(
 
     if signal == 1:
         direction_note = "This is a <b>long (buy)</b> signal — the model expects the price to rise."
-        profit_label = "Profit Target"
+        profit_label = "Profit Target (gross)"
         profit_icon = "📈"
     else:
         direction_note = "This is a <b>short (sell)</b> signal — the model expects the price to fall."
-        profit_label = "Profit Target (short)"
+        profit_label = "Profit Target gross (short)"
         profit_icon = "📉"
 
     confidence_pct = round(confidence * 100)
@@ -93,6 +97,10 @@ def format_signal_message(
         f"🎯 <b>Exit Price:</b> ${exit_usd:,.2f}  (€{exit_eur:,.2f})  <i>(ATR-based, 1h chart)</i>\n"
         f"🛑 <b>Stop Loss:</b> ${stop_loss_usd:,.2f}  (€{stop_loss_eur:,.2f})\n"
         f"{profit_icon} <b>{profit_label}:</b> +{profit_pct:.2f}%\n"
+        f"   ↳ Entry fee (0.25%): -{entry_fee_pct:.2f}%\n"
+        f"   ↳ Exit fee (0.40%):  -{exit_fee_pct:.2f}%\n"
+        f"   ↳ Tax (30% on profit): -{tax_pct:.2f}%\n"
+        f"💰 <b>Net Profit (est.):</b> +{net_profit_pct:.2f}%\n"
         "\n"
         f"🧠 <b>Explanation:</b>\n"
         f"{explanation}\n"

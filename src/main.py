@@ -45,7 +45,7 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
-from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_signal_horizon
+from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_signal_horizon, MIN_NET_PROFIT_PCT
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -225,42 +225,53 @@ def main(dry_run: bool = False, force: bool = False) -> None:
 
         prices = calculate_entry_exit(dfs["1h"], final_signal, exit_multiplier=blended_mult)
 
-        entry_usd = prices["entry_price"]
-        exit_usd = prices["exit_price"]
-        stop_loss_usd = prices["stop_loss"]
-
-        message = format_signal_message(
-            signal=final_signal,
-            entry_usd=entry_usd,
-            exit_usd=exit_usd,
-            stop_loss_usd=stop_loss_usd,
-            entry_eur=usd_to_eur(entry_usd, eur_usd_rate),
-            exit_eur=usd_to_eur(exit_usd, eur_usd_rate),
-            stop_loss_eur=usd_to_eur(stop_loss_usd, eur_usd_rate),
-            profit_pct=prices["profit_margin_pct"],
-            explanation=explanation,
-            confidence=final_confidence,
-            timeframes_summary=timeframes_summary,
-            signal_horizon=signal_horizon,
-        )
-
-        if dry_run:
-            print("\n" + "=" * 60)
-            print("DRY RUN — Telegram message would be:")
-            print("=" * 60)
-            print(message)
-            print("=" * 60 + "\n")
+        net_profit_pct = prices["net_profit_pct"]
+        if net_profit_pct < MIN_NET_PROFIT_PCT and not force:
+            logger.info(
+                "Net profit %.2f%% is below minimum %.1f%% (after fees & tax) — skipping signal",
+                net_profit_pct, MIN_NET_PROFIT_PCT,
+            )
         else:
-            sent = send_telegram(telegram_token, telegram_chat_id, message)
-            if sent:
-                history = record_signal(
-                    history,
-                    signal=final_signal,
-                    entry_price_usd=entry_usd,
-                    exit_price_target_usd=exit_usd,
-                    timeframes_summary=timeframes_summary,
-                    confidence=final_confidence,
-                )
+            entry_usd = prices["entry_price"]
+            exit_usd = prices["exit_price"]
+            stop_loss_usd = prices["stop_loss"]
+
+            message = format_signal_message(
+                signal=final_signal,
+                entry_usd=entry_usd,
+                exit_usd=exit_usd,
+                stop_loss_usd=stop_loss_usd,
+                entry_eur=usd_to_eur(entry_usd, eur_usd_rate),
+                exit_eur=usd_to_eur(exit_usd, eur_usd_rate),
+                stop_loss_eur=usd_to_eur(stop_loss_usd, eur_usd_rate),
+                profit_pct=prices["profit_margin_pct"],
+                net_profit_pct=net_profit_pct,
+                entry_fee_pct=prices["entry_fee_pct"],
+                exit_fee_pct=prices["exit_fee_pct"],
+                tax_pct=prices["tax_pct"],
+                explanation=explanation,
+                confidence=final_confidence,
+                timeframes_summary=timeframes_summary,
+                signal_horizon=signal_horizon,
+            )
+
+            if dry_run:
+                print("\n" + "=" * 60)
+                print("DRY RUN — Telegram message would be:")
+                print("=" * 60)
+                print(message)
+                print("=" * 60 + "\n")
+            else:
+                sent = send_telegram(telegram_token, telegram_chat_id, message)
+                if sent:
+                    history = record_signal(
+                        history,
+                        signal=final_signal,
+                        entry_price_usd=entry_usd,
+                        exit_price_target_usd=exit_usd,
+                        timeframes_summary=timeframes_summary,
+                        confidence=final_confidence,
+                    )
 
     # ------------------------------------------------------------------
     # Step 8: Persist signal history
