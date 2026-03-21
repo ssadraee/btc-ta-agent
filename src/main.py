@@ -27,6 +27,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from data_fetcher import fetch_historical, fetch_ohlcv, get_eur_usd_rate, usd_to_eur
 from indicators import compute_features
+from polymarket import fetch_polymarket_sentiment
 from learning import (
     compute_learned_exit_multiplier,
     evaluate_outcomes,
@@ -128,6 +129,23 @@ def main(dry_run: bool = False, force: bool = False) -> None:
     )
 
     # ------------------------------------------------------------------
+    # Step 3b: Fetch Polymarket sentiment (optional)
+    # ------------------------------------------------------------------
+    polymarket_sentiment = fetch_polymarket_sentiment(current_price_usd)
+    if polymarket_sentiment is not None:
+        pm_signal, pm_confidence, pm_summary, pm_source = polymarket_sentiment
+        logger.info(
+            "Polymarket sentiment: %s (confidence: %.1f%%, source: %s)",
+            {1: "BULLISH", 0: "NEUTRAL", -1: "BEARISH"}[pm_signal],
+            pm_confidence * 100,
+            pm_source,
+        )
+    else:
+        pm_summary = None
+        pm_source = None
+        logger.info("Polymarket data unavailable — proceeding without sentiment")
+
+    # ------------------------------------------------------------------
     # Step 4: Generate predictions
     # ------------------------------------------------------------------
     raw_signals: dict[str, tuple[int, float]] = {}
@@ -136,6 +154,9 @@ def main(dry_run: bool = False, force: bool = False) -> None:
         raw_signals[tf] = (signal, confidence)
         signal_name = {1: "BUY", 0: "HOLD", -1: "SELL"}[signal]
         logger.info("  [%s] signal: %s (confidence: %.1f%%)", tf, signal_name, confidence * 100)
+
+    if polymarket_sentiment is not None:
+        raw_signals["polymarket"] = (pm_signal, pm_confidence)
 
     final_signal, final_confidence, timeframes_summary = aggregate_signals(raw_signals)
     signal_horizon = get_signal_horizon(raw_signals)
@@ -253,6 +274,8 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                 confidence=final_confidence,
                 timeframes_summary=timeframes_summary,
                 signal_horizon=signal_horizon,
+                polymarket_summary=pm_summary,
+                polymarket_source=pm_source,
             )
 
             if dry_run:
