@@ -1,18 +1,18 @@
 """
-Polymarket sentiment analysis for BTC trading signals.
+BTC crowd-sentiment analysis for trading signals.
 
-Fetches prediction market data from Polymarket and derives a directional signal
-from the implied median expected BTC price across multiple time horizons
-(short ≤24h, medium 1–7d, long 7–60d, macro >60d).
+Data source priority (first that succeeds wins):
+  1. Bitquery GraphQL API  — cloud-accessible Polymarket data; requires
+     BITQUERY_API_KEY env var (free account at https://bitquery.io).
+  2. Polymarket gamma REST API — works locally but IP geo-blocked on cloud
+     providers (GitHub Actions, AWS, GCP) by Cloudflare.
+  3. Binance Futures sentiment — funding rate + top-trader long/short ratio.
+     No API key required; same Binance/Bybit endpoints the project already
+     uses for OHLCV data.  Always available from cloud environments.
 
-Data source priority:
-  1. Bitquery GraphQL API (cloud-accessible; set BITQUERY_API_KEY env var).
-     Polymarket's gamma REST API is geo-blocked on cloud providers (GitHub
-     Actions, AWS, GCP) by Cloudflare IP-based restrictions.
-  2. Polymarket gamma REST API (fallback for local dev where geo-block may not
-     apply, or when BITQUERY_API_KEY is not configured).
-
-Free Bitquery account: https://bitquery.io
+The Polymarket path derives a signal from the implied median BTC price across
+"Will BTC be above $X?" markets grouped by time horizon.  The Binance Futures
+path derives a signal directly from derivatives market positioning.
 """
 
 import json
@@ -27,6 +27,11 @@ logger = logging.getLogger(__name__)
 
 POLYMARKET_API = "https://gamma-api.polymarket.com/markets"
 BITQUERY_API = "https://streaming.bitquery.io/graphql"
+
+# Binance Futures endpoints (no auth required; Bybit used as fallback)
+_BINANCE_FUTURES_PREMIUM = "https://fapi.binance.com/fapi/v1/premiumIndex"
+_BINANCE_FUTURES_LS_RATIO = "https://fapi.binance.com/futures/data/topLongShortPositionRatio"
+_BYBIT_TICKERS = "https://api.bybit.com/v5/market/tickers"
 
 # GraphQL query for active BTC prediction markets on Polymarket via Bitquery.
 # Bitquery indexes Polymarket smart-contract events on Polygon and exposes
@@ -96,21 +101,12 @@ def fetch_polymarket_sentiment(
     bitquery_key: str | None = None,
 ) -> dict:
     """
-    Fetch BTC prediction markets from Polymarket and derive a directional signal.
+    Derive a BTC crowd-sentiment signal using the best available data source.
 
-    Tries Bitquery first (cloud-accessible) then falls back to the gamma REST
-    API (works locally but geo-blocked on cloud providers).
-
-    The signal is derived from the implied median expected BTC price:
-      - Collect (target_price, yes_prob) pairs from "Will BTC be above $X?" markets
-      - Group by time horizon (short / medium / long / macro)
-      - Per horizon: interpolate where yes_prob = 0.50 → implied median price
-      - Signal = clipped((implied_median − current) / current × 10)
-      - Combine horizons with _HORIZON_WEIGHTS
-
-    Args:
-        current_price_usd: Latest BTC price in USD (used for signal direction).
-        bitquery_key: Bitquery API key. If None, reads BITQUERY_API_KEY env var.
+    Priority:
+      1. Polymarket via Bitquery (if BITQUERY_API_KEY is set)
+      2. Polymarket gamma REST API (works locally; geo-blocked on cloud)
+      3. Binance Futures funding rate + long/short ratio (always available)
 
     Returns:
         dict with keys:
@@ -118,17 +114,33 @@ def fetch_polymarket_sentiment(
           confidence   float  [0, 0.75]      Signal reliability
           horizons     dict   Per-horizon (signal, confidence, n_markets)
           summary      str    Human-readable one-liner
-          market_count int    Total usable markets found
+          market_count int    Total usable Polymarket markets (0 for futures path)
     """
     if bitquery_key is None:
         bitquery_key = os.getenv("BITQUERY_API_KEY")
 
+    # --- Path 1 & 2: Polymarket ---
     try:
         markets = _fetch_markets(bitquery_key)
+        if markets:
+            result = _compute_from_markets(markets, current_price_usd)
+            if result["market_count"] > 0:
+                return result
     except Exception as e:
         logger.warning("Polymarket fetch failed: %s", e)
-        return _empty_result("Polymarket data unavailable")
 
+    # --- Path 3: Binance Futures (no API key, cloud-accessible) ---
+    logger.info("Falling back to Binance Futures sentiment")
+    try:
+        return _fetch_futures_sentiment()
+    except Exception as e:
+        logger.warning("Futures sentiment fetch failed: %s", e)
+
+    return _empty_result("Sentiment data unavailable")
+
+
+def _compute_from_markets(markets: list[dict], current_price_usd: float) -> dict:
+    """Derive a sentiment signal from a list of Polymarket market dicts."""
     # Parse each market into (horizon, target_price, yes_prob, volume)
     parsed: list[tuple[str, float, float, float]] = []
     for m in markets:
@@ -506,6 +518,101 @@ def _parse_json_field(val) -> list:
         except (json.JSONDecodeError, ValueError):
             return []
     return []
+
+
+def _fetch_futures_sentiment() -> dict:
+    """
+    Derive a BTC sentiment signal from Binance Futures market data.
+
+    Uses two complementary signals:
+      - Funding rate: positive → longs paying shorts (bullish/over-leveraged),
+        negative → shorts paying longs (bearish).
+      - Top-trader long/short position ratio: > 1 = more longs, < 1 = more shorts.
+
+    Binance is used as primary, Bybit as fallback (same as OHLCV data_fetcher).
+    No API key required.
+
+    Signal normalisation:
+      funding_signal  = clamp(rate * 3000, -1, 1)
+        typical rate ≈ ±0.0001; 0.0003 → ±0.9 (strong); 0.001 → clamped ±1
+      ls_signal       = clamp(ratio - 1.0, -1, 1)
+        ratio 1.5 → +0.5 (moderately bullish); 0.5 → -0.5 (moderately bearish)
+    """
+    funding_rate: float | None = None
+    ls_ratio: float | None = None
+
+    # --- Funding rate (Binance → Bybit fallback) ---
+    try:
+        resp = requests.get(
+            _BINANCE_FUTURES_PREMIUM,
+            params={"symbol": "BTCUSDT"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        funding_rate = float(resp.json()["lastFundingRate"])
+        logger.debug("Binance funding rate: %s", funding_rate)
+    except Exception as e:
+        logger.debug("Binance funding rate failed (%s), trying Bybit", e)
+        try:
+            resp = requests.get(
+                _BYBIT_TICKERS,
+                params={"category": "linear", "symbol": "BTCUSDT"},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            funding_rate = float(data["result"]["list"][0]["fundingRate"])
+            logger.debug("Bybit funding rate: %s", funding_rate)
+        except Exception as e2:
+            logger.warning("Funding rate fetch failed: %s", e2)
+
+    # --- Long/short ratio (Binance only; Bybit endpoint requires auth) ---
+    try:
+        resp = requests.get(
+            _BINANCE_FUTURES_LS_RATIO,
+            params={"symbol": "BTCUSDT", "period": "1h", "limit": "1"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        ls_ratio = float(resp.json()[0]["longShortRatio"])
+        logger.debug("Binance L/S ratio: %s", ls_ratio)
+    except Exception as e:
+        logger.debug("L/S ratio fetch failed: %s", e)
+
+    if funding_rate is None:
+        raise ValueError("Could not fetch any futures sentiment data")
+
+    funding_signal = max(-1.0, min(1.0, funding_rate * 3000))
+
+    if ls_ratio is not None:
+        ls_signal = max(-1.0, min(1.0, ls_ratio - 1.0))
+        combined = round(0.6 * funding_signal + 0.4 * ls_signal, 4)
+        source_detail = (
+            f"funding={funding_rate:+.4%}, L/S={ls_ratio:.2f}"
+        )
+    else:
+        combined = round(funding_signal, 4)
+        source_detail = f"funding={funding_rate:+.4%}"
+
+    confidence = round(min(0.55, abs(combined) * 0.6 + 0.15), 4)
+    direction = (
+        "bullish" if combined > 0.05
+        else "bearish" if combined < -0.05
+        else "neutral"
+    )
+    summary = (
+        f"Futures sentiment: {direction} ({source_detail}, "
+        f"signal={combined:+.2f}, conf={confidence:.0%})"
+    )
+    logger.info(summary)
+
+    return {
+        "signal": combined,
+        "confidence": confidence,
+        "horizons": {},
+        "summary": summary,
+        "market_count": 0,
+    }
 
 
 def _empty_result(summary: str) -> dict:
