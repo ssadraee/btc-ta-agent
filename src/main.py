@@ -45,6 +45,7 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
+from sentiment import fetch_polymarket_sentiment
 from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_signal_horizon, MIN_NET_PROFIT_PCT
 
 # ---------------------------------------------------------------------------
@@ -128,6 +129,13 @@ def main(dry_run: bool = False, force: bool = False) -> None:
     )
 
     # ------------------------------------------------------------------
+    # Step 3b: Fetch Polymarket sentiment
+    # ------------------------------------------------------------------
+    logger.info("Fetching Polymarket BTC sentiment...")
+    polymarket_data = fetch_polymarket_sentiment(current_price_usd)
+    logger.info("Polymarket: %s", polymarket_data["summary"])
+
+    # ------------------------------------------------------------------
     # Step 4: Generate predictions
     # ------------------------------------------------------------------
     raw_signals: dict[str, tuple[int, float]] = {}
@@ -137,7 +145,9 @@ def main(dry_run: bool = False, force: bool = False) -> None:
         signal_name = {1: "BUY", 0: "HOLD", -1: "SELL"}[signal]
         logger.info("  [%s] signal: %s (confidence: %.1f%%)", tf, signal_name, confidence * 100)
 
-    final_signal, final_confidence, timeframes_summary = aggregate_signals(raw_signals)
+    final_signal, final_confidence, timeframes_summary = aggregate_signals(
+        raw_signals, polymarket=polymarket_data
+    )
     signal_horizon = get_signal_horizon(raw_signals)
     signal_name = {1: "BUY", 0: "HOLD", -1: "SELL"}[final_signal]
     logger.info(
@@ -253,6 +263,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                 confidence=final_confidence,
                 timeframes_summary=timeframes_summary,
                 signal_horizon=signal_horizon,
+                polymarket=polymarket_data,
             )
 
             if dry_run:

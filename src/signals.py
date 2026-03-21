@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 # Timeframe weights: longer timeframes carry more influence
 TIMEFRAME_WEIGHTS = {"1h": 0.25, "4h": 0.35, "1d": 0.40}
 
+# Fraction of the final score reserved for Polymarket sentiment (when available)
+POLYMARKET_TA_SPLIT = 0.20
+
 # Minimum confidence per timeframe to contribute to the aggregate
 MIN_CONFIDENCE = 0.45
 
@@ -42,15 +45,23 @@ LOOKAHEAD_HOURS = {"1h": 12, "4h": 24, "1d": 120}
 
 
 def aggregate_signals(
-    signals: dict[str, tuple[int, float]]
+    signals: dict[str, tuple[int, float]],
+    polymarket: dict | None = None,
 ) -> tuple[int, float, str]:
     """
     Combine per-timeframe model signals into one final decision.
+
+    When Polymarket sentiment data is available with sufficient confidence,
+    it contributes POLYMARKET_TA_SPLIT (20%) to the final score and TA
+    signals are rescaled to the remaining 80%.  If Polymarket data is absent
+    or has confidence < 0.15, the function behaves exactly as before.
 
     Args:
         signals: {"1h": (signal, confidence), "4h": ..., "1d": ...}
                  signal: 1=BUY, 0=HOLD, -1=SELL
                  confidence: [0, 1]
+        polymarket: optional result from sentiment.fetch_polymarket_sentiment()
+                    dict with keys: signal (float), confidence (float), ...
 
     Returns:
         (final_signal, weighted_confidence, timeframe_summary_string)
@@ -69,6 +80,31 @@ def aggregate_signals(
         parts.append(f"{tf}: {SIGNAL_NAMES[signal]} ({confidence:.0%})")
 
     timeframe_summary = " | ".join(parts)
+
+    if total_weight == 0 and (polymarket is None or polymarket.get("confidence", 0) < 0.15):
+        return 0, 0.0, timeframe_summary
+
+    # Blend Polymarket sentiment when available and confident enough
+    pm_signal = 0.0
+    pm_conf = 0.0
+    use_polymarket = (
+        polymarket is not None
+        and polymarket.get("confidence", 0.0) >= 0.15
+        and polymarket.get("market_count", 0) >= 2
+    )
+
+    if use_polymarket:
+        pm_signal = float(polymarket["signal"])
+        pm_conf = float(polymarket["confidence"])
+        ta_scale = 1.0 - POLYMARKET_TA_SPLIT
+        weighted_sum *= ta_scale
+        total_weight *= ta_scale
+        weighted_sum += pm_signal * pm_conf * POLYMARKET_TA_SPLIT
+        total_weight += POLYMARKET_TA_SPLIT
+        logger.debug(
+            "Polymarket blended: signal=%.3f conf=%.2f (weight=%.0f%%)",
+            pm_signal, pm_conf, POLYMARKET_TA_SPLIT * 100,
+        )
 
     if total_weight == 0:
         return 0, 0.0, timeframe_summary

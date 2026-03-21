@@ -64,6 +64,7 @@ def format_signal_message(
     confidence: float,
     timeframes_summary: str,
     signal_horizon: str = "1–5 days",
+    polymarket: dict | None = None,
 ) -> str:
     """
     Build an HTML-formatted Telegram message for a trading signal.
@@ -86,6 +87,8 @@ def format_signal_message(
     confidence_pct = round(confidence * 100)
     confidence_bar = _confidence_bar(confidence_pct)
 
+    polymarket_section = _format_polymarket_section(polymarket)
+
     message = (
         f"{emoji} <b>BTC Trading Signal — {name}</b>\n"
         f"<i>{now}</i>\n"
@@ -105,10 +108,13 @@ def format_signal_message(
         f"🧠 <b>Explanation:</b>\n"
         f"{explanation}\n"
         "\n"
+        f"{polymarket_section}"
         f"⏱ <b>Timeframes:</b> {timeframes_summary}\n"
         f"🧭 <b>Signal Horizon:</b> ~{signal_horizon}\n"
         f"📊 <b>Confidence:</b> {confidence_pct}% {confidence_bar}\n"
-        f"<i>Weighted model certainty across all 3 timeframes (1d 40% · 4h 35% · 1h 25%). Higher = stronger agreement.</i>\n"
+        f"<i>Weighted model certainty across all 3 timeframes (1d 40% · 4h 35% · 1h 25%)"
+        f"{' + Polymarket 20%' if polymarket and polymarket.get('market_count', 0) >= 2 else ''}."
+        f" Higher = stronger agreement.</i>\n"
         "\n"
         f"⚠️ <i>This is not financial advice. Always manage your risk and never invest more than you can afford to lose.</i>"
     )
@@ -225,3 +231,54 @@ def _confidence_bar(pct: int) -> str:
     filled = round(pct / 10)
     empty = 10 - filled
     return "▓" * filled + "░" * empty
+
+
+def _format_polymarket_section(polymarket: dict | None) -> str:
+    """
+    Build the Polymarket sentiment block for the Telegram message.
+
+    Returns an empty string when no data is available, so the caller can
+    embed it directly without extra conditional logic.
+    """
+    if not polymarket or polymarket.get("market_count", 0) < 2:
+        return ""
+
+    sig = polymarket.get("signal", 0.0)
+    conf = polymarket.get("confidence", 0.0)
+    market_count = polymarket.get("market_count", 0)
+
+    if sig > 0.05:
+        direction = "Bullish"
+        dir_icon = "▲"
+    elif sig < -0.05:
+        direction = "Bearish"
+        dir_icon = "▼"
+    else:
+        direction = "Neutral"
+        dir_icon = "◆"
+
+    lines = [
+        f"🔮 <b>Polymarket Sentiment:</b> {direction} ({conf:.0%} confidence, {market_count} markets)\n"
+    ]
+
+    horizon_labels = {
+        "short":  "Short-term  (≤24h)",
+        "medium": "Medium-term (1–7d)",
+        "long":   "Long-term   (7–60d)",
+        "macro":  "Macro       (>60d)",
+    }
+    horizons = polymarket.get("horizons", {})
+    for horizon_key in ("short", "medium", "long", "macro"):
+        if horizon_key not in horizons:
+            continue
+        h_sig, h_conf, h_n = horizons[horizon_key]
+        if h_n == 0:
+            continue
+        arrow = "▲" if h_sig > 0.05 else "▼" if h_sig < -0.05 else "◆"
+        label = horizon_labels[horizon_key]
+        lines.append(
+            f"   {arrow} {label}: {h_sig:+.2f} ({h_n} market{'s' if h_n != 1 else ''})\n"
+        )
+
+    lines.append("\n")
+    return "".join(lines)
