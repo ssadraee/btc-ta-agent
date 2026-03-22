@@ -68,7 +68,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 | `TRAINING_DAYS` | 730 (2 years) | `main.py` |
 | `RECENT_CANDLES` | 300 | `main.py` |
 | `MIN_SIGNAL_CONFIDENCE` | 0.55 | `main.py` |
-| `TIMEFRAME_WEIGHTS` | 1h=0.25, 4h=0.35, 1d=0.40, polymarket=0.15 | `signals.py` |
+| `TIMEFRAME_WEIGHTS` | 1h=0.15, 4h=0.25, 1d=0.30, polymarket=0.30 | `signals.py` |
 | `MIN_CONFIDENCE` (per TF) | 0.45 | `signals.py` |
 | `SIGNAL_THRESHOLD` | 0.40 | `signals.py` |
 | `ATR_EXIT_MULTIPLIER` | 2.0 | `signals.py` |
