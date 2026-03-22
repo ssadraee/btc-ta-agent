@@ -534,6 +534,14 @@ def _parse_threshold_market(market: dict) -> dict | None:
                     "probability": float(price),
                 })
 
+        # Fallback: binary Yes/No market — extract price from question field
+        if not results:
+            question = market.get("question") or market.get("slug") or ""
+            price_level = _extract_price_from_outcome(question)
+            if price_level is not None and len(prices) >= 1:
+                yes_prob = float(prices[0])
+                results.append({"price_level": price_level, "probability": yes_prob})
+
         if not results:
             return None
 
@@ -588,9 +596,17 @@ def _parse_clob_threshold(market: dict) -> dict | None:
             if price_level is not None:
                 results.append({"price_level": price_level, "probability": prob})
 
+        # Fallback: binary Yes/No market — extract price from slug/question
+        if not results:
+            question = market.get("question") or market.get("slug") or ""
+            price_level = _extract_price_from_outcome(question)
+            if price_level is not None and tokens:
+                yes_prob = float(tokens[0].get("price", 0))
+                results.append({"price_level": price_level, "probability": yes_prob})
+
         if not results:
             return None
-        title = market.get("slug") or "btc-threshold"
+        title = market.get("question") or market.get("slug") or "btc-threshold"
         return {"type": "threshold", "outcomes": results, "volume": volume, "title": title}
     except (ValueError, KeyError):
         return None
@@ -628,6 +644,14 @@ def _parse_goldsky_threshold(
             price_level = _extract_price_from_outcome(str(outcome))
             if price_level is not None:
                 results.append({"price_level": price_level, "probability": float(price)})
+
+        # Fallback: binary Yes/No market — extract price from question
+        if not results:
+            question = market.get("question") or market.get("slug") or ""
+            price_level = _extract_price_from_outcome(question)
+            if price_level is not None and prices:
+                results.append({"price_level": price_level, "probability": float(prices[0])})
+
         if not results:
             return None
         title = market.get("question") or market.get("slug") or "btc-threshold"
@@ -809,7 +833,7 @@ def _is_btc_market(slug: str, title: str) -> bool:
 def _is_threshold_market(slug: str, title: str) -> bool:
     """Return True if slug or title indicates a price threshold market."""
     text = f"{slug} {title}".lower()
-    return any(kw in text for kw in ("price", "hit", "above", "below"))
+    return any(kw in text for kw in ("price", "hit", "above", "below", "reach", "what"))
 
 
 def _is_updown_market(slug: str, title: str) -> bool:
