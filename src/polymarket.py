@@ -141,11 +141,22 @@ def _fetch_btc_markets_with_fallback() -> tuple[list[dict], list[dict], str]:
 def _fetch_via_gamma() -> tuple[list[dict], list[dict]]:
     """Fetch from the Gamma API (richest metadata).
 
-    Fetches events once and classifies them into updown vs threshold,
-    plus slug-based fetch for timestamped updown intervals.
+    Fetches events via tag filtering (primary) and text search (supplementary),
+    then classifies them into updown vs threshold.
     """
-    # Fetch events once for both updown and threshold classification
     events = _gamma_fetch_events()
+    search_events = _gamma_search_events()
+
+    # Merge, dedup by event id
+    seen_ids = {e.get("id") for e in events if e.get("id")}
+    for ev in search_events:
+        eid = ev.get("id")
+        if eid and eid not in seen_ids:
+            seen_ids.add(eid)
+            events.append(ev)
+
+    logger.info("Gamma API: %d BTC events after merging tag + search results", len(events))
+
     updown = _gamma_fetch_updown(events)
     thresholds = _gamma_fetch_thresholds(events)
     return updown, thresholds
@@ -194,6 +205,30 @@ def _gamma_fetch_events() -> list[dict]:
     logger.info("Gamma API: fetched %d crypto events, %d are Bitcoin-related",
                 len(all_events), len(btc_events))
     return btc_events
+
+
+def _gamma_search_events() -> list[dict]:
+    """Search for Bitcoin events via Gamma /public-search endpoint (supplementary)."""
+    try:
+        resp = requests.get(
+            f"{GAMMA_API_URL}/public-search",
+            params={"q": "bitcoin", "limit_per_type": 50},
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        events = data.get("events", [])
+        btc_events = [
+            e for e in events
+            if _is_btc_market(e.get("slug", ""), e.get("title", ""))
+        ]
+        logger.info("Gamma search: found %d events, %d Bitcoin-related",
+                    len(events), len(btc_events))
+        return btc_events
+    except Exception:
+        logger.debug("Gamma /public-search failed (supplementary, non-fatal)",
+                     exc_info=True)
+        return []
 
 
 def _gamma_fetch_updown(events: list[dict]) -> list[dict]:
