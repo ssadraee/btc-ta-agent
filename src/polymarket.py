@@ -40,6 +40,7 @@ GOLDSKY_SUBGRAPH_URL = (
 # ---------------------------------------------------------------------------
 REQUEST_TIMEOUT = 10
 MIN_VOLUME_USD = 1_000
+CRYPTO_TAG_ID = 21  # Polymarket tag for Crypto category
 SENTIMENT_BULL_THRESHOLD = 0.55
 SENTIMENT_BEAR_THRESHOLD = 0.45
 UPDOWN_INTERVALS = ["5m", "15m", "1h", "4h", "1d"]
@@ -151,14 +152,48 @@ def _fetch_via_gamma() -> tuple[list[dict], list[dict]]:
 
 
 def _gamma_fetch_events() -> list[dict]:
-    """Fetch active BTC-related events from the Gamma API."""
-    resp = requests.get(
-        f"{GAMMA_API_URL}/events",
-        params={"active": "true", "closed": "false", "limit": 50},
-        timeout=REQUEST_TIMEOUT,
-    )
-    resp.raise_for_status()
-    return resp.json()
+    """Fetch active Crypto events from the Gamma API using tag filtering and pagination.
+
+    Uses tag_id=21 (Crypto) with related_tags to get all crypto markets,
+    then filters for Bitcoin-related events client-side.
+    """
+    all_events: list[dict] = []
+    offset = 0
+    page_size = 100
+
+    while True:
+        resp = requests.get(
+            f"{GAMMA_API_URL}/events",
+            params={
+                "tag_id": CRYPTO_TAG_ID,
+                "related_tags": "true",
+                "active": "true",
+                "closed": "false",
+                "limit": page_size,
+                "offset": offset,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        page = resp.json()
+        if not page:
+            break
+        all_events.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+
+    # Filter to Bitcoin-related events only
+    btc_events = []
+    for event in all_events:
+        slug = event.get("slug", "")
+        title = event.get("title", "")
+        if _is_btc_market(slug, title):
+            btc_events.append(event)
+
+    logger.info("Gamma API: fetched %d crypto events, %d are Bitcoin-related",
+                len(all_events), len(btc_events))
+    return btc_events
 
 
 def _gamma_fetch_updown(events: list[dict]) -> list[dict]:
@@ -260,7 +295,7 @@ def _fetch_via_clob() -> tuple[list[dict], list[dict]]:
         # Try the simplified markets endpoint
         resp = requests.get(
             f"{CLOB_API_URL}/simplified-markets",
-            params={"limit": 50},
+            params={"limit": 200},
             timeout=REQUEST_TIMEOUT,
         )
         resp.raise_for_status()
@@ -363,7 +398,7 @@ def _fetch_via_goldsky() -> tuple[list[dict], list[dict]]:
     """
     query = """
     {
-      markets(first: 50, orderBy: tradesQuantity, orderDirection: desc) {
+      markets(first: 200, orderBy: tradesQuantity, orderDirection: desc) {
         id
         question
         slug
