@@ -123,6 +123,8 @@ def _fetch_btc_markets_with_fallback() -> tuple[list[dict], list[dict], str]:
             if updown or thresholds:
                 logger.info("Polymarket data from %s: %d updown, %d threshold markets",
                             name, len(updown), len(thresholds))
+                titles = [m.get("title", "unknown") for m in updown + thresholds]
+                logger.info("Polymarket fetched bet titles: %s", titles)
                 return updown, thresholds, name
             logger.debug("Polymarket %s returned no markets", name)
         except Exception:
@@ -384,12 +386,14 @@ def _parse_updown_market(market: dict, interval: str) -> dict | None:
         if volume < MIN_VOLUME_USD:
             return None
 
+        title = market.get("question") or market.get("slug") or f"btc-updown-{interval}"
         return {
             "type": "updown",
             "interval": interval,
             "up_prob": up_prob,
             "down_prob": down_prob,
             "volume": volume,
+            "title": title,
         }
     except (ValueError, KeyError, json.JSONDecodeError):
         return None
@@ -420,10 +424,12 @@ def _parse_threshold_market(market: dict) -> dict | None:
         if not results:
             return None
 
+        title = market.get("question") or market.get("slug") or "btc-threshold"
         return {
             "type": "threshold",
             "outcomes": results,
             "volume": volume,
+            "title": title,
         }
     except (ValueError, KeyError, json.JSONDecodeError):
         return None
@@ -440,12 +446,14 @@ def _parse_clob_updown(market: dict, interval: str) -> dict | None:
         volume = float(market.get("volume", 0) or 0)
         if volume < MIN_VOLUME_USD:
             return None
+        title = market.get("slug") or f"btc-updown-{interval}"
         return {
             "type": "updown",
             "interval": interval,
             "up_prob": up_prob,
             "down_prob": down_prob,
             "volume": volume,
+            "title": title,
         }
     except (ValueError, KeyError):
         return None
@@ -469,7 +477,8 @@ def _parse_clob_threshold(market: dict) -> dict | None:
 
         if not results:
             return None
-        return {"type": "threshold", "outcomes": results, "volume": volume}
+        title = market.get("slug") or "btc-threshold"
+        return {"type": "threshold", "outcomes": results, "volume": volume, "title": title}
     except (ValueError, KeyError):
         return None
 
@@ -481,12 +490,14 @@ def _parse_goldsky_updown(market: dict, prices: list, volume: float) -> dict | N
             return None
         slug = (market.get("slug") or "").lower()
         interval = _extract_interval_from_slug(slug)
+        title = market.get("question") or market.get("slug") or "btc-updown"
         return {
             "type": "updown",
             "interval": interval,
             "up_prob": float(prices[0]),
             "down_prob": float(prices[1]),
             "volume": volume,
+            "title": title,
         }
     except (ValueError, IndexError):
         return None
@@ -506,7 +517,8 @@ def _parse_goldsky_threshold(
                 results.append({"price_level": price_level, "probability": float(price)})
         if not results:
             return None
-        return {"type": "threshold", "outcomes": results, "volume": volume}
+        title = market.get("question") or market.get("slug") or "btc-threshold"
+        return {"type": "threshold", "outcomes": results, "volume": volume, "title": title}
     except (ValueError, KeyError):
         return None
 
