@@ -174,7 +174,7 @@ def _gamma_fetch_thresholds() -> list[dict]:
     """Fetch long-term BTC price threshold markets from Gamma events."""
     resp = requests.get(
         f"{GAMMA_API_URL}/events",
-        params={"active": "true", "closed": "false", "limit": 100, "keyword": "bitcoin"},
+        params={"active": "true", "closed": "false", "limit": 50},
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
@@ -233,8 +233,7 @@ def _fetch_via_clob() -> tuple[list[dict], list[dict]]:
                 if parsed:
                     updown.append(parsed)
             elif (("bitcoin" in slug or "btc" in slug)
-                  and ("price" in slug or "hit" in slug
-                       or "reach" in slug or "above" in slug or "below" in slug)):
+                  and ("price" in slug or "hit" in slug)):
                 parsed = _parse_clob_threshold(mkt)
                 if parsed:
                     thresholds.append(parsed)
@@ -358,9 +357,7 @@ def _fetch_via_goldsky() -> tuple[list[dict], list[dict]]:
             parsed = _parse_goldsky_updown(mkt, prices, volume)
             if parsed:
                 updown.append(parsed)
-        elif ("price" in slug or "hit" in slug or "reach" in slug
-              or "hit" in question or "reach" in question
-              or "above" in question or "below" in question):
+        elif "price" in slug or "hit" in question:
             parsed = _parse_goldsky_threshold(mkt, prices, outcomes, volume)
             if parsed:
                 thresholds.append(parsed)
@@ -420,16 +417,6 @@ def _parse_threshold_market(market: dict) -> dict | None:
                     "probability": float(price),
                 })
 
-        # Fallback: Yes/No binary market — extract price from question field
-        if not results and len(prices) >= 1:
-            question = market.get("question", "") or market.get("groupItemTitle", "")
-            price_level = _extract_price_from_outcome(question)
-            if price_level is not None:
-                results.append({
-                    "price_level": price_level,
-                    "probability": float(prices[0]),  # "Yes" probability
-                })
-
         if not results:
             return None
 
@@ -480,16 +467,6 @@ def _parse_clob_threshold(market: dict) -> dict | None:
             if price_level is not None:
                 results.append({"price_level": price_level, "probability": prob})
 
-        # Fallback: Yes/No binary market — extract price from question field
-        if not results and tokens:
-            question = market.get("question", "") or market.get("slug", "")
-            price_level = _extract_price_from_outcome(question)
-            if price_level is not None:
-                results.append({
-                    "price_level": price_level,
-                    "probability": float(tokens[0].get("price", 0)),
-                })
-
         if not results:
             return None
         return {"type": "threshold", "outcomes": results, "volume": volume}
@@ -527,14 +504,6 @@ def _parse_goldsky_threshold(
             price_level = _extract_price_from_outcome(str(outcome))
             if price_level is not None:
                 results.append({"price_level": price_level, "probability": float(price)})
-
-        # Fallback: Yes/No binary market — extract price from question field
-        if not results and prices:
-            question = market.get("question", "")
-            price_level = _extract_price_from_outcome(question)
-            if price_level is not None:
-                results.append({"price_level": price_level, "probability": float(prices[0])})
-
         if not results:
             return None
         return {"type": "threshold", "outcomes": results, "volume": volume}
@@ -708,30 +677,22 @@ def _build_summary_html(
 
 def _extract_price_from_outcome(text: str) -> float | None:
     """
-    Extract a price level from outcome text or market question.
+    Extract a price level from outcome text.
 
     Examples:
-        "↑ 100,000"                          → 100000.0
-        "↑ 75,000"                           → 75000.0
-        "$90000"                             → 90000.0
-        "$100K"                              → 100000.0
-        "Will Bitcoin reach $90,000 in ...?" → 90000.0
+        "↑ 100,000" → 100000.0
+        "↑ 75,000"  → 75000.0
+        "$90000"    → 90000.0
     """
     # Remove currency symbols and arrows
     cleaned = text.replace("↑", "").replace("↓", "").replace("$", "").strip()
     # Remove commas
     cleaned = cleaned.replace(",", "")
-    # Extract first number, optionally followed by K/M multiplier
-    match = re.search(r"([\d.]+)\s*([KkMm]?)\b", cleaned)
+    # Extract first number
+    match = re.search(r"[\d.]+", cleaned)
     if match:
         try:
-            value = float(match.group(1))
-            suffix = match.group(2).upper()
-            if suffix == "K":
-                value *= 1_000
-            elif suffix == "M":
-                value *= 1_000_000
-            return value
+            return float(match.group())
         except ValueError:
             pass
     return None
