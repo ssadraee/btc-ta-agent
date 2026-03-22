@@ -5,8 +5,8 @@ Fetches BTC prediction market data from Polymarket and converts implied
 probabilities into a sentiment signal (BUY / SELL / HOLD) with confidence.
 
 Supports two market types:
-  - Short-term Up/Down (binary): 1h, 4h intervals
-  - Long-term price thresholds (multi-outcome): monthly, yearly
+  - Up/Down (binary): 5m, 15m, 1h, 4h, daily, weekly, monthly intervals
+  - Price thresholds (multi-outcome): above/below, hit price, price range
 
 Uses a 3-source fallback chain for geo-restriction resilience:
   1. Gamma API  — richest metadata, may be geo-blocked
@@ -42,14 +42,14 @@ REQUEST_TIMEOUT = 10
 MIN_VOLUME_USD = 1_000
 SENTIMENT_BULL_THRESHOLD = 0.55
 SENTIMENT_BEAR_THRESHOLD = 0.45
-UPDOWN_INTERVALS = ["1h", "4h"]
+UPDOWN_INTERVALS = ["5m", "15m", "1h", "4h", "1d"]
 SHORT_TERM_WEIGHT = 0.60
 LONG_TERM_WEIGHT = 0.40
 
 SIGNAL_NAMES = {1: "BULL", 0: "NEUTRAL", -1: "BEAR"}
 
 # Interval durations in seconds (for slug timestamp rounding)
-_INTERVAL_SECONDS = {"1h": 3600, "4h": 14400}
+_INTERVAL_SECONDS = {"5m": 300, "15m": 900, "1h": 3600, "4h": 14400, "1d": 86400}
 
 
 # ===================================================================
@@ -138,60 +138,101 @@ def _fetch_btc_markets_with_fallback() -> tuple[list[dict], list[dict], str]:
 # ---------------------------------------------------------------------------
 
 def _fetch_via_gamma() -> tuple[list[dict], list[dict]]:
-    """Fetch from the Gamma API (richest metadata)."""
-    updown = _gamma_fetch_updown()
-    thresholds = _gamma_fetch_thresholds()
+    """Fetch from the Gamma API (richest metadata).
+
+    Fetches events once and classifies them into updown vs threshold,
+    plus slug-based fetch for timestamped updown intervals.
+    """
+    # Fetch events once for both updown and threshold classification
+    events = _gamma_fetch_events()
+    updown = _gamma_fetch_updown(events)
+    thresholds = _gamma_fetch_thresholds(events)
     return updown, thresholds
 
 
-def _gamma_fetch_updown() -> list[dict]:
-    """Fetch short-term BTC Up/Down markets via slug generation."""
-    now_ts = int(time.time())
-    markets = []
-
-    for interval in UPDOWN_INTERVALS:
-        secs = _INTERVAL_SECONDS[interval]
-        rounded_ts = (now_ts // secs) * secs
-        slug = f"btc-updown-{interval}-{rounded_ts}"
-
-        resp = requests.get(
-            f"{GAMMA_API_URL}/markets",
-            params={"slug": slug},
-            timeout=REQUEST_TIMEOUT,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-
-        # Response may be a list or a single object
-        items = data if isinstance(data, list) else [data]
-        for item in items:
-            parsed = _parse_updown_market(item, interval)
-            if parsed:
-                markets.append(parsed)
-
-    return markets
-
-
-def _gamma_fetch_thresholds() -> list[dict]:
-    """Fetch long-term BTC price threshold markets from Gamma events."""
+def _gamma_fetch_events() -> list[dict]:
+    """Fetch active BTC-related events from the Gamma API."""
     resp = requests.get(
         f"{GAMMA_API_URL}/events",
         params={"active": "true", "closed": "false", "limit": 50},
         timeout=REQUEST_TIMEOUT,
     )
     resp.raise_for_status()
-    events = resp.json()
+    return resp.json()
 
+
+def _gamma_fetch_updown(events: list[dict]) -> list[dict]:
+    """Fetch BTC Up/Down markets via slug generation + event search."""
     markets = []
+    seen_ids: set[str] = set()
+
+    # --- Part A: slug-based fetch for known intervals ---
+    now_ts = int(time.time())
+    for interval in UPDOWN_INTERVALS:
+        secs = _INTERVAL_SECONDS[interval]
+        rounded_ts = (now_ts // secs) * secs
+        slug = f"btc-updown-{interval}-{rounded_ts}"
+
+        try:
+            resp = requests.get(
+                f"{GAMMA_API_URL}/markets",
+                params={"slug": slug},
+                timeout=REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                mid = item.get("id") or item.get("slug")
+                if mid and mid in seen_ids:
+                    continue
+                parsed = _parse_updown_market(item, interval)
+                if parsed:
+                    if mid:
+                        seen_ids.add(mid)
+                    markets.append(parsed)
+        except Exception:
+            logger.debug("Gamma slug fetch failed for %s", slug, exc_info=True)
+
+    # --- Part B: event search for broader updown markets ---
     for event in events:
-        slug = event.get("slug", "").lower()
-        title = event.get("title", "").lower()
-        # Match BTC price prediction events
-        if not (("bitcoin" in slug or "btc" in slug or "bitcoin" in title or "btc" in title)
-                and ("price" in slug or "price" in title or "hit" in title)):
+        slug = event.get("slug", "")
+        title = event.get("title", "")
+        if not _is_btc_market(slug, title):
+            continue
+        if not _is_updown_market(slug, title):
             continue
 
-        # Events contain nested markets
+        event_markets = event.get("markets", [])
+        for mkt in event_markets:
+            mid = mkt.get("id") or mkt.get("slug")
+            if mid and mid in seen_ids:
+                continue
+            interval = _infer_interval(slug, title)
+            parsed = _parse_updown_market(mkt, interval)
+            if parsed:
+                if mid:
+                    seen_ids.add(mid)
+                markets.append(parsed)
+
+    return markets
+
+
+def _gamma_fetch_thresholds(events: list[dict]) -> list[dict]:
+    """Fetch BTC price threshold markets from Gamma events."""
+    markets = []
+    for event in events:
+        slug = event.get("slug", "")
+        title = event.get("title", "")
+        if not _is_btc_market(slug, title):
+            continue
+        if not _is_threshold_market(slug, title):
+            continue
+        # Skip updown markets (handled separately)
+        if _is_updown_market(slug, title):
+            continue
+
         event_markets = event.get("markets", [])
         for mkt in event_markets:
             parsed = _parse_threshold_market(mkt)
@@ -226,16 +267,19 @@ def _fetch_via_clob() -> tuple[list[dict], list[dict]]:
         data = resp.json()
 
         for mkt in data if isinstance(data, list) else []:
-            slug = mkt.get("slug", "").lower()
+            slug = mkt.get("slug", "")
+            title = mkt.get("question", mkt.get("title", ""))
             tokens = mkt.get("tokens", [])
 
-            if "btc-updown" in slug and tokens:
+            if not _is_btc_market(slug, title):
+                continue
+
+            if _is_updown_market(slug, title) and tokens:
                 interval = _extract_interval_from_slug(slug)
                 parsed = _parse_clob_updown(mkt, interval)
                 if parsed:
                     updown.append(parsed)
-            elif (("bitcoin" in slug or "btc" in slug)
-                  and ("price" in slug or "hit" in slug)):
+            elif _is_threshold_market(slug, title):
                 parsed = _parse_clob_threshold(mkt)
                 if parsed:
                     thresholds.append(parsed)
@@ -344,22 +388,21 @@ def _fetch_via_goldsky() -> tuple[list[dict], list[dict]]:
 
     markets_data = result.get("data", {}).get("markets", [])
     for mkt in markets_data:
-        slug = (mkt.get("slug") or "").lower()
-        question = (mkt.get("question") or "").lower()
+        slug = mkt.get("slug") or ""
+        question = mkt.get("question") or ""
 
-        if not ("btc" in slug or "bitcoin" in slug
-                or "btc" in question or "bitcoin" in question):
+        if not _is_btc_market(slug, question):
             continue
 
         prices = mkt.get("outcomeTokenPrices", [])
         outcomes = mkt.get("outcomes", [])
         volume = float(mkt.get("scaledCollateralVolume", 0) or 0)
 
-        if "updown" in slug:
+        if _is_updown_market(slug, question):
             parsed = _parse_goldsky_updown(mkt, prices, volume)
             if parsed:
                 updown.append(parsed)
-        elif "price" in slug or "hit" in question:
+        elif _is_threshold_market(slug, question):
             parsed = _parse_goldsky_threshold(mkt, prices, outcomes, volume)
             if parsed:
                 thresholds.append(parsed)
@@ -658,7 +701,7 @@ def _build_summary_html(
 
     if updown is not None:
         up_pct = round(updown[0] * 100)
-        lines.append(f"Short-term (1h/4h Up/Down): {up_pct}% ↑")
+        lines.append(f"Short-term (Up/Down markets): {up_pct}% ↑")
 
     if threshold is not None:
         up_pct = round(threshold[0] * 100)
@@ -687,6 +730,43 @@ def _build_summary_html(
 # Helpers
 # ===================================================================
 
+def _is_btc_market(slug: str, title: str) -> bool:
+    """Return True if slug or title references Bitcoin."""
+    text = f"{slug} {title}".lower()
+    return "bitcoin" in text or "btc" in text
+
+
+def _is_threshold_market(slug: str, title: str) -> bool:
+    """Return True if slug or title indicates a price threshold market."""
+    text = f"{slug} {title}".lower()
+    return any(kw in text for kw in ("price", "hit", "above", "below"))
+
+
+def _is_updown_market(slug: str, title: str) -> bool:
+    """Return True if slug or title indicates an up/down directional market."""
+    if "updown" in slug.lower():
+        return True
+    return bool(re.search(r"\bup\s+or\s+down\b", title, re.IGNORECASE))
+
+
+def _infer_interval(slug: str, title: str) -> str:
+    """Infer interval from slug/title text for non-standard updown markets."""
+    text = f"{slug} {title}".lower()
+    for interval in UPDOWN_INTERVALS:
+        if interval in text:
+            return interval
+    mapping = [
+        ("yearly", "yearly"), ("year", "yearly"),
+        ("monthly", "monthly"), ("month", "monthly"),
+        ("weekly", "weekly"), ("week", "weekly"),
+        ("daily", "daily"), ("day", "daily"),
+    ]
+    for keyword, label in mapping:
+        if keyword in text:
+            return label
+    return "unknown"
+
+
 def _extract_price_from_outcome(text: str) -> float | None:
     """
     Extract a price level from outcome text.
@@ -711,8 +791,8 @@ def _extract_price_from_outcome(text: str) -> float | None:
 
 
 def _extract_interval_from_slug(slug: str) -> str:
-    """Extract interval like '1h' or '4h' from a slug."""
+    """Extract interval like '5m', '1h', '4h', '1d' from a slug."""
     for interval in UPDOWN_INTERVALS:
         if interval in slug:
             return interval
-    return "unknown"
+    return _infer_interval(slug, "")
