@@ -9,7 +9,7 @@ Storage format (data/signal_history.json):
   {
     "id": "20240315T120000",
     "timestamp": "2024-03-15T12:00:00+00:00",
-    "signal": 1,                      # 1=BUY, -1=SELL
+    "signal": 1,                      # 1=BUY, 0=HOLD, -1=SELL
     "confidence": 0.67,               # aggregate confidence (0–1)
     "entry_price_usd": 84200.0,
     "exit_price_target_usd": 87400.0,
@@ -65,7 +65,7 @@ def record_signal(
     history: list[dict],
     signal: int,
     entry_price_usd: float,
-    exit_price_target_usd: float,
+    exit_price_target_usd: float | None,
     timeframes_summary: str,
     confidence: float | None = None,
 ) -> list[dict]:
@@ -74,9 +74,9 @@ def record_signal(
 
     Args:
         history: existing signal history list
-        signal: 1=BUY, -1=SELL
+        signal: 1=BUY, 0=HOLD, -1=SELL
         entry_price_usd: price at signal time
-        exit_price_target_usd: target exit price
+        exit_price_target_usd: target exit price (None for HOLD)
         timeframes_summary: human-readable timeframe breakdown string
         confidence: aggregate model confidence (0–1)
 
@@ -100,12 +100,16 @@ def record_signal(
     }
     history = list(history)
     history.append(record)
-    logger.info(
-        "Signal recorded: %s at $%.2f (target $%.2f)",
-        "BUY" if signal == 1 else "SELL",
-        entry_price_usd,
-        exit_price_target_usd,
-    )
+    signal_name = {1: "BUY", 0: "HOLD", -1: "SELL"}[signal]
+    if exit_price_target_usd is not None:
+        logger.info(
+            "Signal recorded: %s at $%.2f (target $%.2f)",
+            signal_name,
+            entry_price_usd,
+            exit_price_target_usd,
+        )
+    else:
+        logger.info("Signal recorded: %s at $%.2f", signal_name, entry_price_usd)
     return history
 
 
@@ -158,8 +162,10 @@ def evaluate_outcomes(
         signal = record["signal"]
         if signal == 1:  # BUY
             correct = pct_change >= OUTCOME_THRESHOLD
-        else:  # SELL
+        elif signal == -1:  # SELL
             correct = pct_change <= -OUTCOME_THRESHOLD
+        else:  # HOLD
+            correct = abs(pct_change) < OUTCOME_THRESHOLD
 
         record = dict(record)
         record["evaluated"] = True
@@ -310,8 +316,10 @@ def get_stats(history: list[dict]) -> dict:
     correct = sum(1 for r in evaluated if r["outcome"] == "correct")
     buys = [r for r in evaluated if r["signal"] == 1]
     sells = [r for r in evaluated if r["signal"] == -1]
+    holds = [r for r in evaluated if r["signal"] == 0]
     buy_correct = sum(1 for r in buys if r["outcome"] == "correct")
     sell_correct = sum(1 for r in sells if r["outcome"] == "correct")
+    hold_correct = sum(1 for r in holds if r["outcome"] == "correct")
 
     return {
         "total_signals": len(history),
@@ -322,4 +330,6 @@ def get_stats(history: list[dict]) -> dict:
         "buy_accuracy_pct": round(buy_correct / len(buys) * 100, 1) if buys else None,
         "sell_signals": len(sells),
         "sell_accuracy_pct": round(sell_correct / len(sells) * 100, 1) if sells else None,
+        "hold_signals": len(holds),
+        "hold_accuracy_pct": round(hold_correct / len(holds) * 100, 1) if holds else None,
     }
