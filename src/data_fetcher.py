@@ -53,17 +53,18 @@ def fetch_ohlcv(symbol: str, interval: str, limit: int = 500) -> pd.DataFrame:
     return _parse_klines(klines)
 
 
-def fetch_historical(symbol: str, interval: str, days: int = 730) -> pd.DataFrame:
+def fetch_historical(symbol: str, interval: str, days: int = 730, start_date: str | None = None) -> pd.DataFrame:
     """
     Fetch historical OHLCV data by paginating klines endpoint.
 
     Tries Binance Global → Binance US → Bybit per page.
-    Max 1000 candles per request; paginates to collect `days` worth of data.
+    Max 1000 candles per request; paginates to collect data from start_date (or `days` lookback).
 
     Args:
         symbol: e.g. "BTCUSDT"
         interval: "1h", "4h", "1d"
-        days: number of calendar days to fetch
+        days: number of calendar days to fetch (used only when start_date is None)
+        start_date: fixed start date in "YYYY-MM-DD" format (UTC); takes priority over days
 
     Returns:
         DataFrame sorted ascending by timestamp
@@ -73,12 +74,16 @@ def fetch_historical(symbol: str, interval: str, days: int = 730) -> pd.DataFram
         raise ValueError(f"Unknown interval: {interval}")
 
     end_ms = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
-    start_ms = end_ms - int(days * 86400 * 1000)
+    if start_date is not None:
+        dt = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        start_ms = int(dt.timestamp() * 1000)
+        logger.info("Fetching %s %s data from %s...", symbol, interval, start_date)
+    else:
+        start_ms = end_ms - int(days * 86400 * 1000)
+        logger.info("Fetching %d days of %s %s data...", days, symbol, interval)
 
     all_candles: list[pd.DataFrame] = []
     current_start = start_ms
-
-    logger.info("Fetching %d days of %s %s data...", days, symbol, interval)
 
     while current_start < end_ms:
         klines = _fetch_klines_with_fallback(

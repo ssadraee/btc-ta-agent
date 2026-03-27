@@ -55,7 +55,7 @@ from signals import aggregate_signals, build_explanation, calculate_entry_exit, 
 
 TIMEFRAMES = ["1h", "4h", "1d"]
 SYMBOL = "BTCUSDT"
-TRAINING_DAYS = 730          # 2 years of history for initial training
+TRAINING_START_DATE = "2020-01-01"  # Expanding window: fixed start, grows over time
 RECENT_CANDLES = 300         # Candles to fetch per run for prediction
 MIN_SIGNAL_CONFIDENCE = 0.55  # Don't notify below this confidence
 DATA_DIR = "data"
@@ -102,7 +102,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
 
         if not model.load(model_path):
             logger.info("No saved model for %s — running initial training...", tf)
-            df_hist = fetch_historical(SYMBOL, tf, days=TRAINING_DAYS)
+            df_hist = fetch_historical(SYMBOL, tf, start_date=TRAINING_START_DATE)
             df_feat = compute_features(df_hist)
             metrics = model.train(df_feat)
             logger.info(
@@ -203,7 +203,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
         pre_importance = {tf: models[tf].get_feature_importance() for tf in TIMEFRAMES}
         retrain_results: dict[str, dict] = {}
         for tf in TIMEFRAMES:
-            df_hist = fetch_historical(SYMBOL, tf, days=TRAINING_DAYS)
+            df_hist = fetch_historical(SYMBOL, tf, start_date=TRAINING_START_DATE)
             df_feat = compute_features(df_hist)
             metrics = models[tf].retrain_incremental(df_feat, outcome_weights=outcome_wts)
             logger.info(
