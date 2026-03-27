@@ -65,7 +65,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 
 | Constant | Value | Location |
 |----------|-------|----------|
-| `TRAINING_DAYS` | 730 (2 years) | `main.py` |
+| `TRAINING_START_DATE` | "2020-01-01" (expanding window) | `main.py` |
 | `RECENT_CANDLES` | 300 | `main.py` |
 | `MIN_SIGNAL_CONFIDENCE` | 0.55 | `main.py` |
 | `TIMEFRAME_WEIGHTS` | 1h=0.15, 4h=0.25, 1d=0.30, polymarket=0.30 | `signals.py` |
