@@ -42,6 +42,7 @@ from learning import (
 from model import BTCModel
 from notifier import (
     format_outcome_message,
+    format_retrain_message,
     format_signal_message,
     send_telegram,
     should_send_signal,
@@ -199,6 +200,8 @@ def main(dry_run: bool = False, force: bool = False) -> None:
             "Retraining trigger: accuracy %.1f%% below threshold — retraining all models...",
             (recent_accuracy or 0) * 100,
         )
+        pre_importance = {tf: models[tf].get_feature_importance() for tf in TIMEFRAMES}
+        retrain_results: dict[str, dict] = {}
         for tf in TIMEFRAMES:
             df_hist = fetch_historical(SYMBOL, tf, days=TRAINING_DAYS)
             df_feat = compute_features(df_hist)
@@ -208,7 +211,23 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                 tf, metrics["accuracy"] * 100,
             )
             models[tf].save(f"{DATA_DIR}/model_{tf}.pkl")
+            retrain_results[tf] = {
+                "accuracy": metrics["accuracy"],
+                "n_train": metrics["n_train"],
+                "importance_before": pre_importance[tf],
+                "importance_after": models[tf].get_feature_importance(),
+            }
         history = mark_used_for_training(history)
+        retrain_stats = get_stats(history)
+        retrain_msg = format_retrain_message(retrain_results, recent_accuracy or 0.0, retrain_stats)
+        if dry_run:
+            print("\n" + "=" * 60)
+            print("DRY RUN — Retraining notification:")
+            print("=" * 60)
+            print(retrain_msg)
+            print("=" * 60 + "\n")
+        elif telegram_token:
+            send_telegram(telegram_token, telegram_chat_id, retrain_msg)
     elif recent_accuracy is not None:
         # Accuracy was good enough — still mark evaluations as consumed
         # so they don't pile up and trigger re-evaluation every run

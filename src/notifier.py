@@ -242,6 +242,168 @@ def should_send_signal(
     return True
 
 
+def format_retrain_message(
+    retrain_results: dict,
+    pre_signal_accuracy: float,
+    stats: dict,
+) -> str:
+    """
+    Build an HTML-formatted Telegram message summarising a model retraining event.
+
+    Args:
+        retrain_results: per-timeframe dict with keys accuracy, n_train,
+            importance_before, importance_after
+        pre_signal_accuracy: signal-history accuracy that triggered the retrain (0–1)
+        stats: output of get_stats() — includes buy/sell accuracy breakdown
+
+    Returns:
+        HTML-formatted string ready for Telegram
+    """
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    bullets = _generate_retrain_explanation(retrain_results, pre_signal_accuracy, stats)
+
+    per_tf_lines = []
+    n_train_parts = []
+    for tf in ("1h", "4h", "1d"):
+        r = retrain_results.get(tf, {})
+        acc = r.get("accuracy")
+        n = r.get("n_train")
+        acc_str = f"{round(acc * 100)}%" if acc is not None else "n/a"
+        n_str = f"{n:,}" if n is not None else "n/a"
+        per_tf_lines.append(f"{tf}: {acc_str}")
+        n_train_parts.append(f"{tf}: {n_str}")
+
+    bullet_text = "\n".join(f"• {b}" for b in bullets)
+
+    message = (
+        f"🔄 <b>Model Retrained</b>\n"
+        f"<i>{now}</i>\n"
+        "\n"
+        f"<b>What changed:</b>\n"
+        f"{bullet_text}\n"
+        "\n"
+        f"<b>Per-timeframe accuracy (test set):</b>\n"
+        f"  {' | '.join(per_tf_lines)}\n"
+        f"  Training samples — {', '.join(n_train_parts)}\n"
+        "\n"
+        f"<i>Model weights updated. Next signals reflect the latest patterns.</i>"
+    )
+    return message
+
+
+def _generate_retrain_explanation(
+    retrain_results: dict,
+    pre_signal_accuracy: float,
+    stats: dict,
+) -> list:
+    """Return up to 5 plain-English bullet points explaining the retrain event."""
+    bullets = []
+
+    # --- Bullet 1: Accuracy change ---
+    post_accs = [
+        r["accuracy"] for r in retrain_results.values() if r.get("accuracy") is not None
+    ]
+    avg_post = sum(post_accs) / len(post_accs) if post_accs else None
+    pre_pct = round(pre_signal_accuracy * 100)
+
+    if avg_post is not None:
+        avg_pct = round(avg_post * 100)
+        if avg_post > pre_signal_accuracy + 0.05:
+            bullets.append(
+                f"Model improved: signal accuracy was {pre_pct}%, model test accuracy now avg {avg_pct}% across timeframes."
+            )
+        elif avg_post < pre_signal_accuracy - 0.05:
+            bullets.append(
+                f"Test accuracy ({avg_pct}% avg) is below prior signal accuracy ({pre_pct}%) — model may need more signal history to generalise."
+            )
+        else:
+            bullets.append(
+                f"Marginal change: signal accuracy was {pre_pct}%, model test accuracy now avg {avg_pct}% — weights refreshed to recent data."
+            )
+    else:
+        bullets.append(f"Signal accuracy before retrain: {pre_pct}%. No post-retrain metrics available.")
+
+    # --- Bullet 2: Feature importance shift ---
+    shifted = []
+    for tf in ("1h", "4h", "1d"):
+        r = retrain_results.get(tf, {})
+        imp_before = r.get("importance_before") or {}
+        imp_after = r.get("importance_after") or {}
+        top_before = next(iter(imp_before), None)
+        top_after = next(iter(imp_after), None)
+        if top_before and top_after and top_before != top_after:
+            shifted.append(f"{tf}: <code>{top_after}</code> (was <code>{top_before}</code>)")
+
+    if shifted:
+        bullets.append(
+            f"Top feature shifted in {', '.join(shifted)} — suggesting a market regime change."
+        )
+    else:
+        bullets.append("Feature rankings stable — model reinforced existing patterns without regime shift.")
+
+    # --- Bullet 3: WHY performance changed (causal) ---
+    buy_acc = stats.get("buy_accuracy_pct")
+    sell_acc = stats.get("sell_accuracy_pct")
+
+    if buy_acc is not None and sell_acc is not None:
+        if buy_acc < 40 and sell_acc < 40:
+            bullets.append(
+                f"Model struggled in both directions (BUY {buy_acc:.0f}%, SELL {sell_acc:.0f}%) — likely choppy, range-bound market conditions."
+            )
+        elif buy_acc < 40:
+            bullets.append(
+                f"BUY signals underperformed ({buy_acc:.0f}% accuracy) — market likely trended sideways or down, weakening long-side patterns."
+            )
+        elif sell_acc < 40:
+            bullets.append(
+                f"SELL signals missed ({sell_acc:.0f}% accuracy) — unexpected bullish continuation may have caught the model off-guard."
+            )
+        elif buy_acc > 60 and sell_acc > 60:
+            bullets.append(
+                f"Both directions performed well (BUY {buy_acc:.0f}%, SELL {sell_acc:.0f}%) — retrain refreshes weights to current volatility regime."
+            )
+        else:
+            weaker = "BUY" if buy_acc < sell_acc else "SELL"
+            weaker_acc = min(buy_acc, sell_acc)
+            bullets.append(
+                f"{weaker} side was weaker ({weaker_acc:.0f}%) — model adjusted sample weights to focus on underperforming signal direction."
+            )
+    else:
+        bullets.append("Insufficient directional history to diagnose cause — model retrained on updated outcome weights.")
+
+    # --- Bullet 4: Risk flag ---
+    if avg_post is not None and avg_post > 0.85:
+        bullets.append(
+            f"Risk: High test accuracy ({round(avg_post * 100)}%) may indicate overfitting to historical patterns — monitor live signal quality."
+        )
+    elif len(shifted) >= 2:
+        bullets.append(
+            "Risk: Feature importance shifted in multiple timeframes — possible data drift; treat next 2–3 signals as probationary."
+        )
+    else:
+        min_n = min(
+            (r["n_train"] for r in retrain_results.values() if r.get("n_train") is not None),
+            default=None,
+        )
+        if min_n is not None and min_n < 5000:
+            bullets.append(
+                f"Risk: Smallest training set is {min_n:,} samples — one timeframe may produce less stable predictions until more data accumulates."
+            )
+        else:
+            bullets.append("No obvious overfitting, instability, or data drift detected.")
+
+    # --- Bullet 5: Directional bias summary ---
+    evaluated = stats.get("evaluated", 0)
+    correct = stats.get("correct", 0)
+    buy_str = f"{buy_acc:.0f}%" if buy_acc is not None else "n/a"
+    sell_str = f"{sell_acc:.0f}%" if sell_acc is not None else "n/a"
+    bullets.append(
+        f"Signal history: {evaluated} evaluated, {correct} correct. BUY: {buy_str} | SELL: {sell_str}."
+    )
+
+    return bullets
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
