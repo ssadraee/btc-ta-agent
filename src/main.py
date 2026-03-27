@@ -177,8 +177,10 @@ def main(dry_run: bool = False, force: bool = False) -> None:
 
     if newly_evaluated:
         logger.info("%d signal(s) evaluated", len(newly_evaluated))
-        # Send outcome notifications for each evaluated signal
+        # Send outcome notifications for each evaluated signal (skip HOLD — not actionable)
         for evaluated_record in newly_evaluated:
+            if evaluated_record["signal"] == 0:
+                continue
             if not dry_run and telegram_token:
                 outcome_msg = format_outcome_message(
                     original_signal=evaluated_record["signal"],
@@ -239,6 +241,21 @@ def main(dry_run: bool = False, force: bool = False) -> None:
     # ------------------------------------------------------------------
     if final_signal == 0:
         logger.info("Signal is HOLD — no notification sent")
+        if final_confidence >= MIN_SIGNAL_CONFIDENCE or force:
+            if not dry_run:
+                history = record_signal(
+                    history,
+                    signal=final_signal,
+                    entry_price_usd=current_price_usd,
+                    exit_price_target_usd=None,
+                    timeframes_summary=timeframes_summary,
+                    confidence=final_confidence,
+                )
+        else:
+            logger.info(
+                "HOLD confidence too low (%.1f%% < %.1f%%) — not recording",
+                final_confidence * 100, MIN_SIGNAL_CONFIDENCE * 100,
+            )
     elif final_confidence < MIN_SIGNAL_CONFIDENCE and not force:
         logger.info(
             "Signal confidence too low (%.1f%% < %.1f%%) — skipping notification",
