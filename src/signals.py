@@ -83,6 +83,8 @@ def aggregate_signals(
         final_signal = -1
     else:
         final_signal = 0
+        # Invert confidence for HOLD: closer to neutral = more confident
+        weighted_confidence = 1.0 - (weighted_confidence / SIGNAL_THRESHOLD)
 
     logger.debug(
         "Aggregate: normalised=%.3f → %s (confidence %.1f%%)",
