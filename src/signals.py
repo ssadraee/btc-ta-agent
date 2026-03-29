@@ -56,39 +56,44 @@ def aggregate_signals(
         (final_signal, weighted_confidence, timeframe_summary_string)
         final_signal: 1=BUY, 0=HOLD, -1=SELL
     """
-    weighted_sum = 0.0
-    total_weight = 0.0
+    scores = {1: 0.0, 0: 0.0, -1: 0.0}  # BUY, HOLD, SELL
     parts = []
 
     for tf, (signal, confidence) in signals.items():
         weight = TIMEFRAME_WEIGHTS.get(tf, 0.0)
-        # Only count confident signals; HOLD contributes 0
         if confidence >= MIN_CONFIDENCE:
-            weighted_sum += signal * confidence * weight
-            total_weight += weight
+            scores[signal] += confidence * weight
         parts.append(f"{tf}: {SIGNAL_NAMES[signal]} ({confidence:.0%})")
 
     timeframe_summary = " | ".join(parts)
 
-    if total_weight == 0:
+    total_score = sum(scores.values())
+    if total_score == 0:
         return 0, 0.0, timeframe_summary
 
-    # Normalise: range is [-1, 1]
-    normalised = weighted_sum / total_weight
-    weighted_confidence = abs(normalised)
+    buy_score, hold_score, sell_score = scores[1], scores[0], scores[-1]
 
-    if normalised > SIGNAL_THRESHOLD:
+    if buy_score > sell_score and buy_score > hold_score:
         final_signal = 1
-    elif normalised < -SIGNAL_THRESHOLD:
+        winner_score = buy_score
+    elif sell_score > buy_score and sell_score > hold_score:
         final_signal = -1
-    else:
+        winner_score = sell_score
+    elif hold_score >= buy_score and hold_score >= sell_score:
+        # HOLD wins (including ties with HOLD)
         final_signal = 0
-        # Invert confidence for HOLD: closer to neutral = more confident
-        weighted_confidence = 1.0 - (weighted_confidence / SIGNAL_THRESHOLD)
+        winner_score = hold_score
+    else:
+        # BUY == SELL (and both > HOLD): conflicting directions → HOLD
+        final_signal = 0
+        winner_score = 0.0
+
+    weighted_confidence = winner_score / total_score if winner_score > 0 else 0.0
 
     logger.debug(
-        "Aggregate: normalised=%.3f → %s (confidence %.1f%%)",
-        normalised, SIGNAL_NAMES[final_signal], weighted_confidence * 100
+        "Aggregate: buy=%.3f hold=%.3f sell=%.3f → %s (confidence %.1f%%)",
+        buy_score, hold_score, sell_score,
+        SIGNAL_NAMES[final_signal], weighted_confidence * 100,
     )
 
     return final_signal, weighted_confidence, timeframe_summary
