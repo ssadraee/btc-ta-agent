@@ -160,7 +160,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 68488.25,
     "outcome_pct_change": -2.8461,
-    "outcome_timestamp": "2026-03-22T00:01:43.979676+00:00"
+    "outcome_timestamp": "2026-03-22T00:01:43.979676+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260323T154429",
@@ -174,7 +175,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 70088.96,
     "outcome_pct_change": -0.7868,
-    "outcome_timestamp": "2026-03-24T15:45:52.444650+00:00"
+    "outcome_timestamp": "2026-03-24T15:45:52.444650+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260326T181414",
@@ -188,7 +190,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 65924.94,
     "outcome_pct_change": -3.6469,
-    "outcome_timestamp": "2026-03-27T19:51:02.112275+00:00"
+    "outcome_timestamp": "2026-03-27T19:51:02.112275+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260327T174331",
@@ -202,7 +205,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66820.76,
     "outcome_pct_change": 1.5481,
-    "outcome_timestamp": "2026-03-28T17:51:50.516380+00:00"
+    "outcome_timestamp": "2026-03-28T17:51:50.516380+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260327T195102",
@@ -216,7 +220,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66866.67,
     "outcome_pct_change": 1.4285,
-    "outcome_timestamp": "2026-03-28T19:53:51.878807+00:00"
+    "outcome_timestamp": "2026-03-28T19:53:51.878807+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260327T204129",
@@ -230,7 +235,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66874.39,
     "outcome_pct_change": 1.4208,
-    "outcome_timestamp": "2026-03-28T21:49:02.819277+00:00"
+    "outcome_timestamp": "2026-03-28T21:49:02.819277+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T190710",
@@ -244,7 +250,8 @@
     "outcome": "correct",
     "outcome_price_usd": 66294.59,
     "outcome_pct_change": -0.1981,
-    "outcome_timestamp": "2026-03-30T19:44:15.865425+00:00"
+    "outcome_timestamp": "2026-03-30T19:44:15.865425+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T192810",
@@ -258,7 +265,8 @@
     "outcome": "correct",
     "outcome_price_usd": 66294.59,
     "outcome_pct_change": -0.2124,
-    "outcome_timestamp": "2026-03-30T19:44:15.865425+00:00"
+    "outcome_timestamp": "2026-03-30T19:44:15.865425+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T195234",
@@ -268,11 +276,12 @@
     "entry_price_usd": 66356.71,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (95%) | 4h: HOLD (84%) | 1d: BUY (91%) | polymarket: SELL (23%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 66489.0,
+    "outcome_pct_change": 0.1994,
+    "outcome_timestamp": "2026-03-30T19:59:36.712479+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T195720",
@@ -282,11 +291,12 @@
     "entry_price_usd": 66349.74,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (92%) | 4h: HOLD (84%) | 1d: BUY (91%) | polymarket: SELL (24%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 66489.0,
+    "outcome_pct_change": 0.2099,
+    "outcome_timestamp": "2026-03-30T19:59:36.712479+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T215153",
@@ -408,6 +418,20 @@
     "entry_price_usd": 66294.59,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (94%) | 4h: HOLD (76%) | 1d: BUY (67%) | polymarket: SELL (12%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
+  },
+  {
+    "id": "20260330T200005",
+    "timestamp": "2026-03-30T20:00:05.302566+00:00",
+    "signal": 0,
+    "confidence": 0.6615102784744978,
+    "entry_price_usd": 66489.0,
+    "exit_price_target_usd": null,
+    "timeframes_summary": "1h: HOLD (96%) | 4h: HOLD (76%) | 1d: BUY (57%) | polymarket: SELL (12%)",
     "evaluated": false,
     "outcome": null,
     "outcome_price_usd": null,
