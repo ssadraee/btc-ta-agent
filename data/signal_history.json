@@ -310,7 +310,8 @@
     "outcome": "correct",
     "outcome_price_usd": 66937.89,
     "outcome_pct_change": 0.3748,
-    "outcome_timestamp": "2026-03-30T22:06:41.764284+00:00"
+    "outcome_timestamp": "2026-03-30T22:06:41.764284+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260329T215800",
@@ -324,7 +325,8 @@
     "outcome": "correct",
     "outcome_price_usd": 66937.89,
     "outcome_pct_change": 0.3169,
-    "outcome_timestamp": "2026-03-30T22:06:41.764284+00:00"
+    "outcome_timestamp": "2026-03-30T22:06:41.764284+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T000500",
@@ -338,7 +340,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 67610.61,
     "outcome_pct_change": 2.5144,
-    "outcome_timestamp": "2026-03-31T06:05:41.281654+00:00"
+    "outcome_timestamp": "2026-03-31T06:05:41.281654+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T062705",
@@ -352,7 +355,8 @@
     "outcome": "correct",
     "outcome_price_usd": 66391.05,
     "outcome_pct_change": -1.4899,
-    "outcome_timestamp": "2026-03-31T09:51:32.023229+00:00"
+    "outcome_timestamp": "2026-03-31T09:51:32.023229+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T145338",
@@ -366,7 +370,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67645.93,
     "outcome_pct_change": 0.5269,
-    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00"
+    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T155320",
@@ -380,7 +385,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67645.93,
     "outcome_pct_change": -0.1697,
-    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00"
+    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T155643",
@@ -394,7 +400,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67645.93,
     "outcome_pct_change": -0.1067,
-    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00"
+    "outcome_timestamp": "2026-03-31T18:06:41.336369+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T184219",
@@ -404,11 +411,12 @@
     "entry_price_usd": 66593.67,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (95%) | 4h: HOLD (87%) | 1d: BUY (57%) | polymarket: SELL (11%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 68003.64,
+    "outcome_pct_change": 2.1173,
+    "outcome_timestamp": "2026-03-31T20:07:50.755364+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T194415",
@@ -418,11 +426,12 @@
     "entry_price_usd": 66294.59,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (94%) | 4h: HOLD (76%) | 1d: BUY (67%) | polymarket: SELL (12%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 68003.64,
+    "outcome_pct_change": 2.578,
+    "outcome_timestamp": "2026-03-31T20:07:50.755364+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T200005",
@@ -432,11 +441,12 @@
     "entry_price_usd": 66489.0,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (96%) | 4h: HOLD (76%) | 1d: BUY (57%) | polymarket: SELL (12%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 68003.64,
+    "outcome_pct_change": 2.278,
+    "outcome_timestamp": "2026-03-31T20:07:50.755364+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260330T220641",
@@ -600,6 +610,20 @@
     "entry_price_usd": 67696.71,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: SELL (58%) | 4h: HOLD (58%) | 1d: BUY (43%) | polymarket: SELL (15%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
+  },
+  {
+    "id": "20260331T200825",
+    "timestamp": "2026-03-31T20:08:25.135164+00:00",
+    "signal": 0,
+    "confidence": 1.0,
+    "entry_price_usd": 68003.64,
+    "exit_price_target_usd": null,
+    "timeframes_summary": "1h: HOLD (51%) | 4h: HOLD (87%) | 1d: BUY (36%) | polymarket: HOLD (9%)",
     "evaluated": false,
     "outcome": null,
     "outcome_price_usd": null,
