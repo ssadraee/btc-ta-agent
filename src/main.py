@@ -47,7 +47,7 @@ from notifier import (
     send_telegram,
     should_send_signal,
 )
-from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_signal_horizon, MIN_NET_PROFIT_PCT
+from signals import aggregate_signals, build_explanation, calculate_entry_exit, compute_dynamic_exit_multiplier, get_evaluation_delay_hours, get_signal_horizon, MIN_NET_PROFIT_PCT
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -250,6 +250,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                     exit_price_target_usd=None,
                     timeframes_summary=timeframes_summary,
                     confidence=final_confidence,
+                    evaluation_delay_hours=24,
                 )
         else:
             logger.info(
@@ -323,6 +324,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
             else:
                 sent = send_telegram(telegram_token, telegram_chat_id, message)
                 if sent:
+                    eval_delay = get_evaluation_delay_hours(raw_signals, final_signal)
                     history = record_signal(
                         history,
                         signal=final_signal,
@@ -330,6 +332,7 @@ def main(dry_run: bool = False, force: bool = False) -> None:
                         exit_price_target_usd=exit_usd,
                         timeframes_summary=timeframes_summary,
                         confidence=final_confidence,
+                        evaluation_delay_hours=eval_delay,
                     )
 
     # ------------------------------------------------------------------

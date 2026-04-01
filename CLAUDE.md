@@ -58,7 +58,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 4. Compute 40 TA features via `indicators.py`
 5. Per-timeframe XGBoost predictions → (signal, confidence)
 6. Weighted aggregation: 1d=40%, 4h=35%, 1h=25%, polymarket=15% (`signals.py`)
-7. Evaluate past signal outcomes (24h delay) → retrain if 10+ new evals
+7. Evaluate past signal outcomes (delay aligned with prediction horizon) → retrain if 10+ new BUY/SELL evals
 8. Send Telegram notification (if actionable: confidence ≥ 55%, net profit after fees & tax ≥ 1%) → persist signal history
 
 ## Key Constants
@@ -77,8 +77,9 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=yyy python src/main.py
 | `EXIT_FEE_RATE` | 0.0040 (0.40%) | `signals.py` |
 | `TAX_RATE` | 0.30 (30%) | `signals.py` |
 | `MIN_NET_PROFIT_PCT` | 1.0 (1%) | `signals.py` |
-| `EVALUATION_DELAY_HOURS` | 24 | `learning.py` |
-| `RETRAIN_THRESHOLD` | 10 | `learning.py` |
+| `EVALUATION_DELAY_HOURS` | 24 (default fallback; per-signal delay based on dominant TF: 1h→12h, 4h→24h, 1d→120h) | `learning.py` |
+| `RETRAIN_THRESHOLD` | 10 (BUY/SELL only, HOLD excluded) | `learning.py` |
+| `MIN_ACCURACY_FOR_SKIP` | 0.90 (90%) | `learning.py` |
 | `OUTCOME_THRESHOLD` | 0.01 (1%) | `learning.py` |
 | `SENTIMENT_BULL_THRESHOLD` | 0.55 | `polymarket.py` |
 | `SENTIMENT_BEAR_THRESHOLD` | 0.45 | `polymarket.py` |

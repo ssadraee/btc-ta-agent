@@ -377,3 +377,36 @@ def get_signal_horizon(signals: dict[str, tuple[int, float]]) -> str:
         if tf in directional:
             return {"1d": "1–5 days", "4h": "12–24 hours", "1h": "up to 12 hours"}[tf]
     return "1–5 days"  # fallback: daily model has highest weight
+
+
+def get_evaluation_delay_hours(
+    signals: dict[str, tuple[int, float]],
+    final_signal: int,
+) -> int:
+    """
+    Return the evaluation delay (in hours) aligned with the prediction horizon.
+
+    Uses the highest-weight timeframe that contributes a directional (non-HOLD)
+    signal with sufficient confidence, matching the logic in get_signal_horizon().
+
+    For HOLD signals, returns 24h as a default since there is no directional
+    prediction horizon to align with.
+
+    Args:
+        signals: {"1h": (signal, confidence), "4h": ..., "1d": ...}
+        final_signal: the aggregate signal (1=BUY, 0=HOLD, -1=SELL)
+
+    Returns:
+        Evaluation delay in hours
+    """
+    if final_signal == 0:
+        return 24
+
+    directional = [
+        tf for tf, (sig, conf) in signals.items()
+        if sig != 0 and conf >= MIN_CONFIDENCE
+    ]
+    for tf in ["1d", "4h", "1h"]:
+        if tf in directional:
+            return LOOKAHEAD_HOURS[tf]
+    return 120  # fallback: daily horizon

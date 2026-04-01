@@ -35,9 +35,9 @@ logger = logging.getLogger(__name__)
 
 HISTORY_PATH = "data/signal_history.json"
 EVALUATION_DELAY_HOURS = 24
-RETRAIN_THRESHOLD = 10   # Retrain after this many new evaluations
+RETRAIN_THRESHOLD = 10   # Retrain after this many new BUY/SELL evaluations (HOLD excluded)
 OUTCOME_THRESHOLD = 0.02  # 2% move to count as correct (matches label threshold)
-MIN_ACCURACY_FOR_SKIP = 0.65  # Skip retraining if recent accuracy is above this
+MIN_ACCURACY_FOR_SKIP = 0.90  # Skip retraining if recent accuracy is above this
 ERROR_WEIGHT_MULTIPLIER = 2.0  # Training weight boost for time periods with incorrect signals
 
 
@@ -68,6 +68,7 @@ def record_signal(
     exit_price_target_usd: float | None,
     timeframes_summary: str,
     confidence: float | None = None,
+    evaluation_delay_hours: int | None = None,
 ) -> list[dict]:
     """
     Append a new signal to the history.
@@ -79,6 +80,9 @@ def record_signal(
         exit_price_target_usd: target exit price (None for HOLD)
         timeframes_summary: human-readable timeframe breakdown string
         confidence: aggregate model confidence (0–1)
+        evaluation_delay_hours: hours to wait before evaluating this signal's
+            outcome, based on the dominant timeframe's prediction horizon.
+            If None, falls back to EVALUATION_DELAY_HOURS (24h).
 
     Returns:
         Updated history list
@@ -92,6 +96,7 @@ def record_signal(
         "entry_price_usd": entry_price_usd,
         "exit_price_target_usd": exit_price_target_usd,
         "timeframes_summary": timeframes_summary,
+        "evaluation_delay_hours": evaluation_delay_hours,
         "evaluated": False,
         "outcome": None,
         "outcome_price_usd": None,
@@ -132,7 +137,6 @@ def evaluate_outcomes(
         (updated_history, newly_evaluated_records)
     """
     now = datetime.now(tz=timezone.utc)
-    cutoff = now - timedelta(hours=EVALUATION_DELAY_HOURS)
     newly_evaluated = []
 
     updated = []
@@ -150,6 +154,9 @@ def evaluate_outcomes(
             updated.append(record)
             continue
 
+        # Use per-signal delay aligned with prediction horizon, fall back to 24h
+        delay_hours = record.get("evaluation_delay_hours") or EVALUATION_DELAY_HOURS
+        cutoff = now - timedelta(hours=delay_hours)
         if ts > cutoff:
             # Not old enough yet
             updated.append(record)
@@ -191,11 +198,15 @@ def evaluate_outcomes(
 
 def should_retrain(history: list[dict]) -> tuple[bool, float | None]:
     """
-    Decide whether retraining is needed based on recent signal accuracy.
+    Decide whether retraining is needed based on recent BUY/SELL signal accuracy.
+
+    Only actionable signals (BUY/SELL) count toward the threshold and accuracy
+    calculation. HOLD signals are excluded as they provide little information
+    about the model's directional prediction quality.
 
     Returns:
         (should_retrain, recent_accuracy)
-        - If fewer than RETRAIN_THRESHOLD evaluations: (False, None)
+        - If fewer than RETRAIN_THRESHOLD actionable evaluations: (False, None)
         - If accuracy >= MIN_ACCURACY_FOR_SKIP: (False, accuracy) — model is fine
         - If accuracy < MIN_ACCURACY_FOR_SKIP: (True, accuracy) — retrain needed
     """
@@ -203,6 +214,7 @@ def should_retrain(history: list[dict]) -> tuple[bool, float | None]:
         r for r in history
         if r.get("evaluated") and r.get("outcome") is not None
         and not r.get("used_for_training", False)
+        and r.get("signal") in (1, -1)  # Only count BUY/SELL, not HOLD
     ]
     if len(recent) < RETRAIN_THRESHOLD:
         return False, None
