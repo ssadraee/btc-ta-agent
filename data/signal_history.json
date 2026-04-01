@@ -498,11 +498,11 @@
     "entry_price_usd": 66763.06,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: SELL (55%) | 4h: HOLD (84%) | 1d: HOLD (44%) | polymarket: SELL (13%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 68655.42,
+    "outcome_pct_change": 2.8344,
+    "outcome_timestamp": "2026-04-01T06:11:34.083093+00:00"
   },
   {
     "id": "20260331T000329",
@@ -512,11 +512,11 @@
     "entry_price_usd": 66749.36,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (73%) | 4h: HOLD (95%) | 1d: BUY (53%) | polymarket: SELL (13%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 68655.42,
+    "outcome_pct_change": 2.8555,
+    "outcome_timestamp": "2026-04-01T06:11:34.083093+00:00"
   },
   {
     "id": "20260331T060541",
@@ -526,11 +526,11 @@
     "entry_price_usd": 67610.61,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (73%) | 4h: HOLD (77%) | 1d: BUY (51%) | polymarket: SELL (13%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 68655.42,
+    "outcome_pct_change": 1.5453,
+    "outcome_timestamp": "2026-04-01T06:11:34.083093+00:00"
   },
   {
     "id": "20260331T060636",
@@ -540,11 +540,11 @@
     "entry_price_usd": 67625.1,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (73%) | 4h: HOLD (80%) | 1d: BUY (51%) | polymarket: SELL (13%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 68655.42,
+    "outcome_pct_change": 1.5236,
+    "outcome_timestamp": "2026-04-01T06:11:34.083093+00:00"
   },
   {
     "id": "20260331T144925",
