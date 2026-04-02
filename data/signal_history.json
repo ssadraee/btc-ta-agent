@@ -610,7 +610,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68078.82,
     "outcome_pct_change": 0.4362,
-    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00"
+    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T181252",
@@ -624,7 +625,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68078.82,
     "outcome_pct_change": 0.5644,
-    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00"
+    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T200825",
@@ -638,7 +640,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68078.82,
     "outcome_pct_change": 0.1106,
-    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00"
+    "outcome_timestamp": "2026-04-01T20:09:40.834918+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T205932",
@@ -652,7 +655,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68289.27,
     "outcome_pct_change": 0.0473,
-    "outcome_timestamp": "2026-04-01T21:04:56.143432+00:00"
+    "outcome_timestamp": "2026-04-01T21:04:56.143432+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T220520",
@@ -666,7 +670,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68216.3,
     "outcome_pct_change": -0.0162,
-    "outcome_timestamp": "2026-04-01T22:06:46.170516+00:00"
+    "outcome_timestamp": "2026-04-01T22:06:46.170516+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T230420",
@@ -680,7 +685,8 @@
     "outcome": "correct",
     "outcome_price_usd": 68179.59,
     "outcome_pct_change": 0.0979,
-    "outcome_timestamp": "2026-04-01T23:50:54.400448+00:00"
+    "outcome_timestamp": "2026-04-01T23:50:54.400448+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260331T235444",
@@ -694,7 +700,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66497.09,
     "outcome_pct_change": -2.6446,
-    "outcome_timestamp": "2026-04-02T05:50:07.204640+00:00"
+    "outcome_timestamp": "2026-04-02T05:50:07.204640+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260401T101601",
@@ -708,7 +715,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66862.6,
     "outcome_pct_change": -2.4488,
-    "outcome_timestamp": "2026-04-02T14:38:20.624405+00:00"
+    "outcome_timestamp": "2026-04-02T14:38:20.624405+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260401T101756",
@@ -722,7 +730,8 @@
     "outcome": "incorrect",
     "outcome_price_usd": 66862.6,
     "outcome_pct_change": -2.4488,
-    "outcome_timestamp": "2026-04-02T14:38:20.624405+00:00"
+    "outcome_timestamp": "2026-04-02T14:38:20.624405+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260401T145437",
@@ -732,11 +741,12 @@
     "entry_price_usd": 68680.34,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (54%) | 4h: HOLD (74%) | 1d: SELL (55%) | polymarket: SELL (13%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "incorrect",
+    "outcome_price_usd": 67019.86,
+    "outcome_pct_change": -2.4177,
+    "outcome_timestamp": "2026-04-02T17:37:53.432675+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260401T180711",
