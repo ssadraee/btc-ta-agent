@@ -877,5 +877,19 @@
     "outcome_price_usd": null,
     "outcome_pct_change": null,
     "outcome_timestamp": null
+  },
+  {
+    "id": "20260402T094610",
+    "timestamp": "2026-04-02T09:46:10.393062+00:00",
+    "signal": 0,
+    "confidence": 1.0,
+    "entry_price_usd": 66425.59,
+    "exit_price_target_usd": null,
+    "timeframes_summary": "1h: HOLD (68%) | 4h: HOLD (71%) | 1d: HOLD (45%) | polymarket: SELL (18%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
   }
 ]
