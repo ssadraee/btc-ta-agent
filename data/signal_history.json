@@ -1220,11 +1220,11 @@
     "entry_price_usd": 66897.75,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (76%) | 4h: HOLD (85%) | 1d: HOLD (47%) | polymarket: SELL (19%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 67323.84,
+    "outcome_pct_change": 0.6369,
+    "outcome_timestamp": "2026-04-04T20:00:11.229915+00:00"
   },
   {
     "id": "20260403T215405",
@@ -1696,6 +1696,20 @@
     "entry_price_usd": 67341.27,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (60%) | 4h: HOLD (87%) | 1d: SELL (49%) | polymarket: SELL (28%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
+  },
+  {
+    "id": "20260404T200011",
+    "timestamp": "2026-04-04T20:00:11.230157+00:00",
+    "signal": 0,
+    "confidence": 0.6864011680152883,
+    "entry_price_usd": 67323.84,
+    "exit_price_target_usd": null,
+    "timeframes_summary": "1h: HOLD (66%) | 4h: HOLD (87%) | 1d: SELL (48%) | polymarket: SELL (27%)",
     "evaluated": false,
     "outcome": null,
     "outcome_price_usd": null,
