@@ -1660,7 +1660,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67299.49,
     "outcome_pct_change": -0.0271,
-    "outcome_timestamp": "2026-04-05T17:16:01.626436+00:00"
+    "outcome_timestamp": "2026-04-05T17:16:01.626436+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T174943",
@@ -1674,7 +1675,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67406.88,
     "outcome_pct_change": 0.1218,
-    "outcome_timestamp": "2026-04-05T17:50:28.526539+00:00"
+    "outcome_timestamp": "2026-04-05T17:50:28.526539+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T180151",
@@ -1688,7 +1690,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67316.03,
     "outcome_pct_change": -0.0102,
-    "outcome_timestamp": "2026-04-05T18:03:17.350013+00:00"
+    "outcome_timestamp": "2026-04-05T18:03:17.350013+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T190331",
@@ -1702,7 +1705,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67410.23,
     "outcome_pct_change": 0.1511,
-    "outcome_timestamp": "2026-04-05T19:05:51.791064+00:00"
+    "outcome_timestamp": "2026-04-05T19:05:51.791064+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T192042",
@@ -1716,7 +1720,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67518.58,
     "outcome_pct_change": 0.1229,
-    "outcome_timestamp": "2026-04-05T19:23:59.526243+00:00"
+    "outcome_timestamp": "2026-04-05T19:23:59.526243+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T194756",
@@ -1730,7 +1735,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67321.52,
     "outcome_pct_change": -0.0293,
-    "outcome_timestamp": "2026-04-05T19:50:40.008773+00:00"
+    "outcome_timestamp": "2026-04-05T19:50:40.008773+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T200011",
@@ -1744,7 +1750,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67321.52,
     "outcome_pct_change": -0.0034,
-    "outcome_timestamp": "2026-04-05T20:01:04.461682+00:00"
+    "outcome_timestamp": "2026-04-05T20:01:04.461682+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T205118",
@@ -1758,7 +1765,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67627.97,
     "outcome_pct_change": 0.5336,
-    "outcome_timestamp": "2026-04-05T20:51:58.456316+00:00"
+    "outcome_timestamp": "2026-04-05T20:51:58.456316+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T210413",
@@ -1772,7 +1780,8 @@
     "outcome": "correct",
     "outcome_price_usd": 67639.08,
     "outcome_pct_change": 0.5117,
-    "outcome_timestamp": "2026-04-05T21:04:56.634113+00:00"
+    "outcome_timestamp": "2026-04-05T21:04:56.634113+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T214800",
@@ -1782,11 +1791,12 @@
     "entry_price_usd": 67297.86,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (85%) | 4h: HOLD (85%) | 1d: SELL (50%) | polymarket: SELL (27%)",
-    "evaluated": false,
-    "outcome": null,
-    "outcome_price_usd": null,
-    "outcome_pct_change": null,
-    "outcome_timestamp": null
+    "evaluated": true,
+    "outcome": "correct",
+    "outcome_price_usd": 67491.87,
+    "outcome_pct_change": 0.2883,
+    "outcome_timestamp": "2026-04-05T21:49:19.442231+00:00",
+    "used_for_training": true
   },
   {
     "id": "20260404T220038",
@@ -2286,6 +2296,20 @@
     "entry_price_usd": 67639.08,
     "exit_price_target_usd": null,
     "timeframes_summary": "1h: HOLD (79%) | 4h: HOLD (71%) | 1d: SELL (54%) | polymarket: SELL (28%)",
+    "evaluated": false,
+    "outcome": null,
+    "outcome_price_usd": null,
+    "outcome_pct_change": null,
+    "outcome_timestamp": null
+  },
+  {
+    "id": "20260405T214919",
+    "timestamp": "2026-04-05T21:49:19.442577+00:00",
+    "signal": 0,
+    "confidence": 0.6133973082584153,
+    "entry_price_usd": 67491.87,
+    "exit_price_target_usd": null,
+    "timeframes_summary": "1h: HOLD (55%) | 4h: HOLD (76%) | 1d: SELL (57%) | polymarket: SELL (27%)",
     "evaluated": false,
     "outcome": null,
     "outcome_price_usd": null,
